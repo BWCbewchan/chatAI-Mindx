@@ -3,10 +3,12 @@ import ReactMarkdown from "react-markdown";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import remarkGfm from "remark-gfm";
 import {
+  checkServerHealth,
   exportSb3FromChat,
   fetchAdminAnalytics,
   loginAdmin,
   logoutAdmin,
+  NETWORK_ERROR_MESSAGE,
   sendChatMessage,
   uploadSb3
 } from "./api.js";
@@ -762,6 +764,7 @@ export default function App() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState(null);
   const [analyticsLastUpdated, setAnalyticsLastUpdated] = useState(null);
+  const [serverOnline, setServerOnline] = useState(null);
 
   const isAdminAuthenticated = Boolean(adminToken);
   const numberFormatter = useMemo(() => new Intl.NumberFormat("vi-VN"), []);
@@ -844,6 +847,35 @@ export default function App() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(userProfile));
   }, [userProfile]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const probe = async () => {
+      try {
+        await checkServerHealth();
+        if (!isCancelled) {
+          setServerOnline(true);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setServerOnline(false);
+        }
+      }
+    };
+
+    probe();
+    const intervalId = window.setInterval(probe, 5000);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1003,13 +1035,20 @@ export default function App() {
         const data = await fetchAdminAnalytics(effectiveToken);
         setAnalyticsData(data);
         setAnalyticsLastUpdated(Date.now());
+        setServerOnline(true);
       } catch (error) {
-        if (error.status === 401 || error.status === 403) {
+        const message = error?.message || "Không thể tải dữ liệu thống kê.";
+
+        if (message === NETWORK_ERROR_MESSAGE) {
+          setServerOnline(false);
+          setAnalyticsError(message);
+        } else if (error.status === 401 || error.status === 403) {
           setAdminToken(null);
           setAnalyticsData(null);
           setAnalyticsError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
         } else {
-          setAnalyticsError(error.message || "Không thể tải dữ liệu thống kê.");
+          setAnalyticsError(message);
+          setServerOnline(true);
         }
       } finally {
         setAnalyticsLoading(false);
@@ -1036,6 +1075,7 @@ export default function App() {
           username: trimmedUsername,
           password: adminPassword
         });
+        setServerOnline(true);
 
         if (result?.token) {
           setAdminToken(result.token);
@@ -1046,7 +1086,11 @@ export default function App() {
           setAdminLoginError("Máy chủ không trả về mã đăng nhập.");
         }
       } catch (error) {
-        setAdminLoginError(error.message || "Không thể đăng nhập quản trị.");
+        const message = error?.message || "Không thể đăng nhập quản trị.";
+        setAdminLoginError(message);
+        if (message === NETWORK_ERROR_MESSAGE) {
+          setServerOnline(false);
+        }
       } finally {
         setAdminLoginPending(false);
       }
@@ -1162,6 +1206,7 @@ export default function App() {
         profile: userProfile,
         sessionId: currentSessionId
       });
+      setServerOnline(true);
 
       setMessages([
         ...nextMessages,
@@ -1177,8 +1222,25 @@ export default function App() {
       }
     } catch (err) {
       console.error(err);
-      setError(err.message);
-      setMessages(nextMessages.slice(0, nextMessages.length));
+      const errorMessage = typeof err?.message === "string" && err.message.trim()
+        ? err.message.trim()
+        : "Yêu cầu thất bại";
+      setError(errorMessage);
+
+      if (errorMessage === NETWORK_ERROR_MESSAGE) {
+        setServerOnline(false);
+        setMessages([
+          ...nextMessages,
+          {
+            role: "assistant",
+            content: NETWORK_ERROR_MESSAGE,
+            references: []
+          }
+        ]);
+      } else {
+        setServerOnline(true);
+        setMessages(nextMessages);
+      }
     } finally {
       setPending(false);
     }
@@ -1217,6 +1279,7 @@ ${prompt}`;
     setError(null);
     try {
       const result = await uploadSb3(file);
+      setServerOnline(true);
       setSb3Report(result);
       const feedback = result.aiFeedback
         ? result.aiFeedback
@@ -1232,7 +1295,11 @@ ${prompt}`;
       ]);
     } catch (err) {
       console.error(err);
-      setError(err.message);
+      const message = err?.message || "Không thể tải tệp";
+      setError(message);
+      if (message === NETWORK_ERROR_MESSAGE) {
+        setServerOnline(false);
+      }
     } finally {
       setPending(false);
       event.target.value = "";
@@ -1425,6 +1492,7 @@ ${prompt}`;
 
     try {
       const blob = await exportSb3FromChat(latestScratchContent);
+      setServerOnline(true);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -1445,7 +1513,11 @@ ${prompt}`;
       ]);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Không thể xuất file .sb3");
+      const message = err?.message || "Không thể xuất file .sb3";
+      setError(message);
+      if (message === NETWORK_ERROR_MESSAGE) {
+        setServerOnline(false);
+      }
     } finally {
       setExporting(false);
     }
@@ -1949,8 +2021,26 @@ ${prompt}`;
     </>
   );
 
+  const serverStatusOverlay =
+    serverOnline === false ? (
+      <div
+        className="server-status-overlay"
+        role="alertdialog"
+        aria-live="assertive"
+        aria-busy="true"
+        aria-modal="true"
+      >
+        <div className="server-status-card">
+          <div className="server-status-spinner" aria-hidden="true" />
+          <h2>Cô đang mở máy</h2>
+          <p>{NETWORK_ERROR_MESSAGE}</p>
+        </div>
+      </div>
+    ) : null;
+
   return (
     <div className={`app ${activeView === "admin" ? "admin-mode" : ""}`}>
+      {serverStatusOverlay}
       <Routes>
         <Route
           path="/dashboard"

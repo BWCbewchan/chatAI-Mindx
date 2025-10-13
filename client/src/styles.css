@@ -1620,6 +1620,81 @@ footer button:disabled {
   background: rgba(15, 23, 42, 0.12);
 }
 
+.server-status-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(3px);
+  z-index: 4000;
+}
+
+.server-status-card {
+  width: min(90vw, 360px);
+  padding: 32px 36px;
+  border-radius: 20px;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.server-status-card h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.server-status-card p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #334155;
+}
+
+.server-status-spinner {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 6px solid rgba(99, 102, 241, 0.18);
+  border-top-color: #6366f1;
+  animation: server-status-spin 1s linear infinite;
+}
+
+@media (prefers-color-scheme: dark) {
+  .server-status-overlay {
+    background: rgba(15, 23, 42, 0.85);
+  }
+
+  .server-status-card {
+    background: #0f172a;
+    color: #e2e8f0;
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.6);
+  }
+
+  .server-status-card p {
+    color: #cbd5f5;
+  }
+
+  .server-status-spinner {
+    border-color: rgba(148, 163, 184, 0.3);
+    border-top-color: #818cf8;
+  }
+}
+
+@keyframes server-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 820px) {
   .app.admin-mode {
     padding: 16px;
