@@ -1,18 +1,17 @@
-import { useState } from "react";
 import {
-    Bar,
-    BarChart,
-    CartesianGrid,
-    Cell,
-    Legend,
-    Line,
-    LineChart,
-    Pie,
-    PieChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis
+	Bar,
+	BarChart,
+	CartesianGrid,
+	Cell,
+	Legend,
+	Line,
+	LineChart,
+	Pie,
+	PieChart,
+	ResponsiveContainer,
+	Tooltip,
+	XAxis,
+	YAxis
 } from "recharts";
 
 const COLOR_PALETTE = ["#6366F1", "#22D3EE", "#FB7185", "#F97316", "#A855F7", "#0EA5E9", "#10B981", "#F59E0B"];
@@ -39,187 +38,6 @@ const truncate = (text, length = 140) => {
 	return trimmed.length > length ? `${trimmed.slice(0, length)}…` : trimmed;
 };
 
-const SAMPLE_ANALYTICS = {
-	summary: {
-		totalSessions: 42,
-		activeSessions24h: 8,
-		userMessages: 278,
-		assistantMessages: 312,
-		averageMessagesPerSession: 14.1,
-		uniqueLearners: 18,
-		attachmentsUploaded: 27,
-		sessionsWithAttachments: 12,
-		firstMessageAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 21).toISOString(),
-		lastMessageAt: new Date().toISOString()
-	},
-	usage: {
-		hourly: [
-			{ hour: 0, count: 3 },
-			{ hour: 1, count: 2 },
-			{ hour: 2, count: 1 },
-			{ hour: 3, count: 1 },
-			{ hour: 4, count: 1 },
-			{ hour: 5, count: 2 },
-			{ hour: 6, count: 4 },
-			{ hour: 7, count: 6 },
-			{ hour: 8, count: 9 },
-			{ hour: 9, count: 11 },
-			{ hour: 10, count: 12 },
-			{ hour: 11, count: 10 },
-			{ hour: 12, count: 8 },
-			{ hour: 13, count: 9 },
-			{ hour: 14, count: 13 },
-			{ hour: 15, count: 15 },
-			{ hour: 16, count: 14 },
-			{ hour: 17, count: 12 },
-			{ hour: 18, count: 11 },
-			{ hour: 19, count: 9 },
-			{ hour: 20, count: 18 },
-			{ hour: 21, count: 14 },
-			{ hour: 22, count: 10 },
-			{ hour: 23, count: 6 }
-		],
-		weekly: [
-			{ day: "Thứ 2", count: 34 },
-			{ day: "Thứ 3", count: 28 },
-			{ day: "Thứ 4", count: 22 },
-			{ day: "Thứ 5", count: 19 },
-			{ day: "Thứ 6", count: 41 },
-			{ day: "Thứ 7", count: 24 },
-			{ day: "Chủ nhật", count: 16 }
-		],
-		daily: Array.from({ length: 14 }, (_, index) => {
-			const date = new Date();
-			date.setDate(date.getDate() - (13 - index));
-			return {
-				date: date.toISOString().slice(0, 10),
-				label: date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
-				count: Math.floor(10 + Math.sin(index / 2) * 6 + (index % 3) * 3)
-			};
-		})
-	},
-	topics: {
-		guides: [
-			{ title: "Buổi 04 - Giao thông an toàn", count: 21 },
-			{ title: "Buổi 07 - Đại chiến không trung", count: 18 },
-			{ title: "Buổi 10 - Dự án phần 1", count: 16 },
-			{ title: "Workshop kỹ năng", count: 14 },
-			{ title: "Buổi 02 - Thiệp mừng", count: 12 }
-		],
-		keywords: [
-			{ keyword: "Scratch", count: 38 },
-			{ keyword: "animation", count: 24 },
-			{ keyword: "game", count: 22 },
-			{ keyword: "loop", count: 19 },
-			{ keyword: "score", count: 15 },
-			{ keyword: "broadcast", count: 14 },
-			{ keyword: "sprite", count: 13 },
-			{ keyword: "collision", count: 11 }
-		]
-	},
-	audience: {
-		programs: [
-			{ label: "SB", count: 22 },
-			{ label: "SA", count: 12 },
-			{ label: "SI", count: 8 }
-		],
-		grades: [
-			{ label: "Lớp 3", count: 6 },
-			{ label: "Lớp 4", count: 8 },
-			{ label: "Lớp 5", count: 11 },
-			{ label: "Lớp 6", count: 10 },
-			{ label: "Lớp 7", count: 7 }
-		],
-		goals: [
-			{ label: "Hoàn thiện dự án cuối khóa", count: 12 },
-			{ label: "Ôn luyện kiến thức Scratch", count: 9 },
-			{ label: "Chuẩn bị thi MindX Challenge", count: 6 }
-		],
-		favoriteTopics: [
-			{ label: "Game bắn máy bay", count: 10 },
-			{ label: "Robot", count: 8 },
-			{ label: "Toán vui", count: 7 },
-			{ label: "Âm nhạc", count: 5 }
-		],
-		preferences: {
-			tone: [
-				{ label: "coach", count: 18 },
-				{ label: "enthusiastic", count: 12 },
-				{ label: "concise", count: 7 }
-			],
-			detail: [
-				{ label: "balanced", count: 20 },
-				{ label: "deep", count: 10 },
-				{ label: "concise", count: 6 }
-			],
-			includeScratchSteps: { true: 30, false: 5 },
-			includePracticeIdeas: { true: 28, false: 7 }
-		}
-	},
-	sessions: {
-		recent: [
-			{
-				id: "session-1",
-				displayTitle: "Buổi 07 - Điều khiển máy bay",
-				title: "Buổi 07 - Điều khiển máy bay",
-				createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
-				lastActiveAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-				totalMessages: 18,
-				userMessages: 9,
-				assistantMessages: 9,
-				topTopics: ["Buổi 07", "Game chiến đấu", "Scratch"]
-			},
-			{
-				id: "session-2",
-				displayTitle: "Dự án cuối khóa - ý tưởng",
-				title: "Dự án cuối khóa - ý tưởng",
-				createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 6).toISOString(),
-				lastActiveAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-				totalMessages: 22,
-				userMessages: 11,
-				assistantMessages: 11,
-				topTopics: ["Dự án", "Thuyết trình"]
-			},
-			{
-				id: "session-3",
-				displayTitle: "Workshop kỹ năng",
-				title: "Workshop kỹ năng",
-				createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
-				lastActiveAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-				totalMessages: 12,
-				userMessages: 6,
-				assistantMessages: 6,
-				topTopics: ["Workshop", "Teamwork"]
-			}
-		]
-	},
-	messages: {
-		recent: [
-			{
-				timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-				sessionId: "session-1",
-				role: "user",
-				content: "Cô ơi máy bay của em không bay khi nhấn phím cách, phải làm sao?",
-				references: ["Buổi 07 - Đại chiến không trung"]
-			},
-			{
-				timestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-				sessionId: "session-1",
-				role: "assistant",
-				content: "Em thêm khối `Events > When Space Key Pressed` và lồng khối `Control > Repeat 10` để máy bay bay mượt hơn nhé!",
-				references: ["Buổi 07 - Đại chiến không trung"]
-			},
-			{
-				timestamp: new Date(Date.now() - 1000 * 60 * 50).toISOString(),
-				sessionId: "session-2",
-				role: "assistant",
-				content: "Cô gợi ý em chia bài thuyết trình thành 3 phần: Giới thiệu, Cách làm và Bài học rút ra với mỗi phần 2 slide.",
-				references: ["Buổi 14 - Thuyết trình cuối khóa"]
-			}
-		]
-	},
-	generatedAt: new Date().toISOString()
-};
 
 export default function Dashboard({
 	isAdminAuthenticated,
@@ -241,9 +59,7 @@ export default function Dashboard({
 	dateTimeFormatter,
 	shortDateFormatter
 }) {
-	const [showDemo, setShowDemo] = useState(() => !isAdminAuthenticated);
-	const isDemoMode = showDemo && !isAdminAuthenticated;
-	const allowDashboard = isAdminAuthenticated || isDemoMode;
+	const allowDashboard = isAdminAuthenticated;
 
 	if (!allowDashboard) {
 		return (
@@ -276,13 +92,6 @@ export default function Dashboard({
 							{adminLoginPending ? "Đang đăng nhập..." : "Đăng nhập"}
 						</button>
 					</form>
-						<button
-							type="button"
-							className="toolbar-button"
-							onClick={() => setShowDemo(true)}
-						>
-							🌟 Xem thử dữ liệu demo
-						</button>
 					<button type="button" className="toolbar-button subtle" onClick={onReturnToChat}>
 						⬅️ Quay lại chat
 					</button>
@@ -291,8 +100,8 @@ export default function Dashboard({
 		);
 	}
 
-	const hasRealData = Boolean(analyticsData) && !isDemoMode;
-	const dataSource = hasRealData ? analyticsData : SAMPLE_ANALYTICS;
+	const hasRealData = Boolean(analyticsData);
+	const dataSource = analyticsData;
 
 	const summary = dataSource?.summary ?? {};
 	const usage = dataSource?.usage ?? {};
@@ -393,10 +202,9 @@ export default function Dashboard({
 		<div className="admin-dashboard">
 			<div className="admin-dashboard-header">
 				<div className="admin-dashboard-title">
-					<h2>📊 Dashboard quản trị{isDemoMode ? " (Demo)" : ""}</h2>
+					<h2>📊 Dashboard quản trị</h2>
 					<p>
 						Quan sát hành vi học tập và xu hướng câu hỏi của học sinh MindX.
-						{isDemoMode && " Đây là dữ liệu minh họa để bạn tham khảo giao diện."}
 					</p>
 					<div className="admin-dashboard-meta">
 						{generatedAtLabel && <span>Cập nhật lúc {generatedAtLabel}</span>}
@@ -407,33 +215,31 @@ export default function Dashboard({
 					<button type="button" className="toolbar-button subtle" onClick={onReturnToChat}>
 						⬅️ Quay lại chat
 					</button>
-					<button type="button" className="toolbar-button" onClick={() => onRefresh()} disabled={analyticsLoading || isDemoMode}>
-						{analyticsLoading ? "Đang tải..." : isDemoMode ? "Không khả dụng trong demo" : "🔄 Làm mới"}
+					<button type="button" className="toolbar-button" onClick={() => onRefresh()} disabled={analyticsLoading}>
+						{analyticsLoading ? "Đang tải..." : "🔄 Làm mới"}
 					</button>
 					<button
 						type="button"
 						className="toolbar-button danger"
-						onClick={isDemoMode ? () => setShowDemo(false) : onLogout}
+						onClick={onLogout}
 					>
-						{isDemoMode ? "🚪 Thoát demo" : "🚪 Đăng xuất"}
+						🚪 Đăng xuất
 					</button>
 				</div>
 			</div>
 
-			{(!hasRealData || isDemoMode) && !analyticsLoading && (
+			{!hasRealData && !analyticsLoading && (
 				<div className="admin-sample-banner">
 					<span role="img" aria-hidden="true">✨</span>
 					<span>
-						{isDemoMode
-							? "Đang xem ở chế độ demo. Khi đăng nhập quản trị thành công, dữ liệu thật sẽ hiển thị."
-							: "Đang hiển thị dữ liệu minh họa. Khi có cuộc trò chuyện thật, bảng điều khiển sẽ tự động cập nhật số liệu."}
+						Chưa có dữ liệu thống kê. Khi có cuộc trò chuyện thật, bảng điều khiển sẽ tự động cập nhật số liệu.
 					</span>
 				</div>
 			)}
 
 			{analyticsError && <div className="error admin-error">{analyticsError}</div>}
 
-			{analyticsLoading && !hasRealData && !isDemoMode ? (
+			{analyticsLoading && !hasRealData ? (
 				<div className="admin-loading">Đang tải dữ liệu thống kê...</div>
 			) : dataSource ? (
 				<>
@@ -539,7 +345,7 @@ export default function Dashboard({
 												<YAxis dataKey="name" type="category" stroke="#475569" width={160} />
 												<Tooltip formatter={(value) => numberFormatter.format(value ?? 0)} />
 												<Bar dataKey="value" radius={[0, 12, 12, 0]}>
-													{keywordChartData.map((entry, index) => (
+													{keywordChartData.map((entry) => (
 														<Cell key={`keyword-cell-${entry.name}`} fill={entry.color} />
 													))}
 												</Bar>
@@ -567,7 +373,7 @@ export default function Dashboard({
 												<YAxis stroke="#475569" allowDecimals={false} tickFormatter={(value) => numberFormatter.format(value)} />
 												<Tooltip formatter={(value) => numberFormatter.format(value ?? 0)} />
 												<Bar dataKey="value" radius={[6, 6, 0, 0]}>
-													{gradeChartData.map((entry, index) => (
+													{gradeChartData.map((entry) => (
 														<Cell key={`grade-cell-${entry.name}`} fill={entry.color} />
 													))}
 												</Bar>
@@ -614,7 +420,7 @@ export default function Dashboard({
 										<ResponsiveContainer width="100%" height="100%">
 											<PieChart>
 												<Pie data={toneChartData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={80} paddingAngle={4}>
-													{toneChartData.map((entry, index) => (
+													{toneChartData.map((entry) => (
 														<Cell key={`tone-cell-${entry.name}`} fill={entry.color} />
 													))}
 												</Pie>
@@ -635,7 +441,7 @@ export default function Dashboard({
 											<ResponsiveContainer width="100%" height="100%">
 												<PieChart>
 													<Pie data={detailChartData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={70} paddingAngle={4}>
-														{detailChartData.map((entry, index) => (
+														{detailChartData.map((entry) => (
 															<Cell key={`detail-cell-${entry.name}`} fill={entry.color} />
 														))}
 													</Pie>
@@ -651,7 +457,7 @@ export default function Dashboard({
 										<ResponsiveContainer width="100%" height="100%">
 											<PieChart>
 												<Pie data={includeScratchChart} dataKey="value" nameKey="name" innerRadius={35} outerRadius={65} startAngle={210} endAngle={-30}>
-													{includeScratchChart.map((entry, index) => (
+													{includeScratchChart.map((entry) => (
 														<Cell key={`scratch-toggle-${entry.name}`} fill={entry.color} />
 													))}
 												</Pie>
@@ -664,7 +470,7 @@ export default function Dashboard({
 										<ResponsiveContainer width="100%" height="100%">
 											<PieChart>
 												<Pie data={includePracticeChart} dataKey="value" nameKey="name" innerRadius={35} outerRadius={65} startAngle={210} endAngle={-30}>
-													{includePracticeChart.map((entry, index) => (
+													{includePracticeChart.map((entry) => (
 														<Cell key={`practice-toggle-${entry.name}`} fill={entry.color} />
 													))}
 												</Pie>

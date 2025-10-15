@@ -5,10 +5,11 @@ import { fileURLToPath } from "url";
 
 import { appConfig, teacherPersona } from "./config.js";
 import { buildContextIndex } from "./contextRetriever.js";
+import { connectMongo } from "./mongo.js";
+import { createAdminRouter } from "./routes/admin.js";
 import createChatRouter from "./routes/chat.js";
 import createExportRouter from "./routes/export.js";
 import createUploadRouter from "./routes/upload.js";
-import { createAdminRouter } from "./routes/admin.js";
 import { loadTeachingGuides } from "./teachingGuideLoader.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,6 +31,13 @@ async function bootstrap() {
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: "2mb" }));
+
+  // Try connect Mongo (optional). If not configured, continue with in-memory analytics.
+  try {
+    await connectMongo();
+  } catch (err) {
+    console.warn("Không thể kết nối MongoDB, sẽ dùng bộ nhớ tạm:", err?.message || err);
+  }
 
   app.get("/api/health", (_req, res) => {
     res.json({

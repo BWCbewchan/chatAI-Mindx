@@ -1,16 +1,17 @@
-import { Children, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownToLine, FileText, FolderUp, Gauge, Paperclip, Pencil, Send, Shapes, Trash2, X } from "lucide-react";
+import { Children, Fragment, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import remarkGfm from "remark-gfm";
 import {
-  checkServerHealth,
-  exportSb3FromChat,
-  fetchAdminAnalytics,
-  loginAdmin,
-  logoutAdmin,
-  NETWORK_ERROR_MESSAGE,
-  sendChatMessage,
-  uploadSb3
+    checkServerHealth,
+    exportSb3FromChat,
+    fetchAdminAnalytics,
+    loginAdmin,
+    logoutAdmin,
+    NETWORK_ERROR_MESSAGE,
+    sendChatMessage,
+    uploadSb3
 } from "./api.js";
 import Dashboard from "./Dashboard.jsx";
 
@@ -33,10 +34,7 @@ Cô MindX luôn sẵn sàng giải thích bằng lời dễ hiểu, thêm ví d�
 > 💡 Em có thể tải tệp \`.sb3\` để cô xem kỹ từng khối nữa nhé!
 > 💡 Khi nhắc đến lệnh Scratch, cô sẽ ghi theo tiếng Anh chuẩn như \`Events > When Green Flag Clicked\`.
 > 💡 Cô bắt đầu bằng cách chỉ em kéo từng khối, cuối phần Scratch sẽ ghép lại chuỗi lệnh hoàn chỉnh cho em.
-
-### ❓Hỏi lại cô
-- "Cô ơi, em nên bắt đầu từ buổi nào?"
-- "Dự án của em đang lỗi phần chuyển cảnh, cô giúp em với ạ?"`,
+`,
   references: []
 };
 
@@ -103,16 +101,13 @@ const SCRATCH_LEGEND = [
   }
 ];
 
-const DEFAULT_SUGGESTION_PROMPTS = [
+// suggestion section removed
+
+const INLINE_SUGGESTION_PROMPTS = [
   "Cô nhắc lại phần hoạt động của buổi 04 giúp em với?",
   "Em nên sửa phần chuyển cảnh trong buổi 07 như thế nào?",
   "Cô tạo giúp em file .sb3 với chuỗi lệnh vừa hướng dẫn nhé?"
 ];
-
-const DEFAULT_SUGGESTION_SECTION = {
-  title: "❓Hỏi lại cô",
-  suggestions: DEFAULT_SUGGESTION_PROMPTS
-};
 
 const STORAGE_KEYS = {
   sessions: "mindx-stem-chat:sessions",
@@ -308,78 +303,7 @@ function normalizeForComparison(text) {
     .toLowerCase();
 }
 
-function extractSuggestionsFromContent(content) {
-  if (typeof content !== "string" || !content) {
-    return null;
-  }
-
-  const lines = content.split(/\n/);
-  let headingTitle = null;
-  let headingIndex = -1;
-  const keywordChecks = ["goi y hoi co", "hoi lai co"];
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const trimmed = lines[index]?.trim();
-    if (!trimmed) {
-      continue;
-    }
-
-    const withoutMarkers = trimmed
-      .replace(/^#{1,6}\s*/, "")
-      .replace(/^[>*\s]+/, "")
-      .replace(/^[*_`]+|[*_`]+$/g, "")
-      .trim();
-
-    const normalized = normalizeForComparison(withoutMarkers);
-
-    if (!keywordChecks.some((keyword) => normalized.includes(keyword))) {
-      continue;
-    }
-
-    headingTitle = withoutMarkers.replace(/:+\s*$/, "");
-    headingIndex = index;
-    break;
-  }
-
-  if (headingIndex === -1 || !headingTitle) {
-    return null;
-  }
-
-  const suggestions = [];
-
-  for (let index = headingIndex + 1; index < lines.length; index += 1) {
-    const rawLine = lines[index];
-    if (typeof rawLine !== "string") continue;
-    const trimmed = rawLine.trim();
-
-    if (!trimmed) {
-      continue;
-    }
-
-    const normalizedLine = normalizeForComparison(trimmed.replace(/^[>*\s]+/, ""));
-
-    if (/^#{1,6}\s/.test(trimmed) || keywordChecks.some((keyword) => normalizedLine.includes(keyword))) {
-      break;
-    }
-
-    const cleaned = trimmed
-      .replace(/^[-*•+\d.)\s>]+/, "")
-      .replace(/^["“”']+|["“”']+$/g, "")
-      .trim();
-
-    if (cleaned.length === 0 || cleaned.length > 160) {
-      continue;
-    }
-
-    suggestions.push(cleaned);
-  }
-
-  if (!suggestions.length) {
-    return null;
-  }
-
-  return { title: headingTitle, suggestions };
-}
+// suggestion extraction removed
 
 const SCRATCH_CATEGORY_MAP = {
   events: "scratch-events",
@@ -416,6 +340,18 @@ const SCRATCH_CATEGORY_MAP = {
   khoi_tu_tao: "scratch-myblocks",
   custom_blocks: "scratch-myblocks",
   custom_block: "scratch-myblocks"
+};
+
+const SCRATCH_CLASS_DISPLAY = {
+  "scratch-events": "Events",
+  "scratch-motion": "Motion",
+  "scratch-looks": "Looks",
+  "scratch-sound": "Sound",
+  "scratch-control": "Control",
+  "scratch-sensing": "Sensing",
+  "scratch-operators": "Operators",
+  "scratch-variables": "Variables",
+  "scratch-myblocks": "My Blocks"
 };
 
 function formatFileSize(bytes) {
@@ -476,13 +412,55 @@ function getScratchCategoryClass(text) {
   const cleaned = text.trim();
   if (!cleaned) return null;
 
-  const matched = /([^>]+)>(.+)/.exec(cleaned);
-  if (!matched) return null;
-
-  const categoryRaw = matched[1];
-  const blockName = matched[2].trim();
+  const matched = /([^>›]+)[>›](.+)/.exec(cleaned);
+  const hasExplicitCategory = Boolean(matched);
+  const categoryRaw = hasExplicitCategory ? matched[1] : "";
+  const blockName = (hasExplicitCategory ? matched[2] : cleaned).trim();
   const normalizedKey = normalizeCategoryName(categoryRaw);
-  const mappedClass = SCRATCH_CATEGORY_MAP[normalizedKey] || SCRATCH_CATEGORY_MAP[categoryRaw.trim().toLowerCase()];
+
+  const tryMapCategory = (raw, normalized) => {
+    // Direct normalized map
+    if (SCRATCH_CATEGORY_MAP[normalized]) return SCRATCH_CATEGORY_MAP[normalized];
+    // Raw lowercase map
+    const rawLower = String(raw).trim().toLowerCase();
+    if (SCRATCH_CATEGORY_MAP[rawLower]) return SCRATCH_CATEGORY_MAP[rawLower];
+    // First token of normalized (before underscore) e.g., "control_dieu_khien" -> "control"
+    const firstToken = normalized.split("_")[0];
+    if (SCRATCH_CATEGORY_MAP[firstToken]) return SCRATCH_CATEGORY_MAP[firstToken];
+    // Strip parentheses in raw then lowercase
+    const withoutParen = String(raw).replace(/\(.+?\)/g, "").trim().toLowerCase();
+    if (SCRATCH_CATEGORY_MAP[withoutParen]) return SCRATCH_CATEGORY_MAP[withoutParen];
+    // Starts-with match on normalized (e.g., "control_dieu_khien" starts with "control")
+    for (const key of Object.keys(SCRATCH_CATEGORY_MAP)) {
+      if (normalized.startsWith(key)) {
+        return SCRATCH_CATEGORY_MAP[key];
+      }
+    }
+    return null;
+  };
+
+  let mappedClass = tryMapCategory(categoryRaw, normalizedKey);
+
+  const inferCategoryFromBlock = (block) => {
+    const b = block.toLowerCase();
+    if (/^when\s+(green\s+flag|\w+\s+key|space\s+key|this\s+sprite\s+clicked)/i.test(block)) return "scratch-events";
+    if (/^(broadcast|when\s+i\s+receive)/i.test(block)) return "scratch-events";
+    if (/^(set\s+\[?.+\]?\s+to|change\s+\[?.+\]?\s+by|show\s+variable|hide\s+variable)/i.test(block)) return "scratch-variables";
+    if (/^(say\s+|think\s+|switch\s+costume|next\s+costume|change\s+size|set\s+size|show\b|hide\b)/i.test(block)) return "scratch-looks";
+    if (/^(play\s+sound|start\s+sound|change\s+volume|set\s+volume)/i.test(block)) return "scratch-sound";
+    if (/^(move\s+\d+\s+steps|turn\s+|go\s+to|glide\s+|point\s+in\s+direction)/i.test(block)) return "scratch-motion";
+    return null;
+  };
+
+  // If mapping is missing or incorrectly labeled as control while block clearly matches other group, fix it
+  const inferred = inferCategoryFromBlock(blockName);
+  if (!mappedClass && inferred) {
+    mappedClass = inferred;
+  } else if (mappedClass === "scratch-control" && inferred && inferred !== "scratch-control") {
+    mappedClass = inferred;
+  }
+
+  const displayCategory = SCRATCH_CLASS_DISPLAY[mappedClass] || (categoryRaw ? categoryRaw.trim() : SCRATCH_CLASS_DISPLAY[mappedClass] || "");
 
   if (!mappedClass) {
     return null;
@@ -490,7 +468,7 @@ function getScratchCategoryClass(text) {
 
   return {
     className: mappedClass,
-    category: categoryRaw.trim(),
+    category: displayCategory,
     block: blockName
   };
 }
@@ -530,16 +508,35 @@ function parseScratchStack(text) {
     return null;
   }
 
-  const rows = [];
+  const result = [];
+  let currentIndent = 0;
 
-  for (const line of lines) {
-    const stripped = line
+  const isEndLine = (s) => /(^|\b)(end|end if|end forever|kết thúc)($|\b)/i.test(s);
+  const isElseLine = (s) => /(^|\b)(else|nếu không)($|\b)/i.test(s);
+  const opensBlock = (chips) =>
+    chips.some((c) =>
+      (c.className === "scratch-control" && /^(if\b|repeat\b|forever\b)/i.test(c.block)) ||
+      (c.className === "scratch-events" && /^when\s+/i.test(c.block))
+    );
+
+  for (const rawLine of lines) {
+    const stripped = rawLine
       .replace(/^[-*•\u2022➤\d.)\s]+/, "")
       .replace(/\s+/g, " ")
       .trim();
 
     if (!stripped) {
       continue;
+    }
+
+    // Dedent before processing if the line is an END or ELSE
+    let lineIndent = currentIndent;
+    if (isEndLine(stripped)) {
+      currentIndent = Math.max(0, currentIndent - 1);
+      lineIndent = currentIndent;
+    } else if (isElseLine(stripped)) {
+      currentIndent = Math.max(0, currentIndent - 1);
+      lineIndent = currentIndent; // else stays at the same level as the if-block
     }
 
     let commandSequence = stripped;
@@ -557,7 +554,18 @@ function parseScratchStack(text) {
       .filter(Boolean);
 
     if (!segments.length) {
-      return null;
+      // Treat as a control label line (e.g., Else / End)
+      result.push({
+        chips: [
+          {
+            className: "scratch-control",
+            category: "Control",
+            block: stripped
+          }
+        ],
+        indent: lineIndent
+      });
+      continue;
     }
 
     const chips = [];
@@ -565,15 +573,22 @@ function parseScratchStack(text) {
     for (const segment of segments) {
       const info = getScratchCategoryClass(segment);
       if (!info) {
-        return null;
+        // Fallback per-segment to keep other segments' colors
+        chips.push({ className: "scratch-control", category: "Control", block: segment });
+      } else {
+        chips.push(info);
       }
-      chips.push(info);
     }
 
-    rows.push(chips);
+    result.push({ chips, indent: lineIndent });
+
+    // Increase indent after lines that open a block
+    if (opensBlock(chips)) {
+      currentIndent += 1;
+    }
   }
 
-  return rows.length ? rows : null;
+  return result.length ? result : null;
 }
 
 const markdownComponents = {
@@ -610,26 +625,45 @@ const markdownComponents = {
     if (scratchStack) {
       return (
         <div className="scratch-stack" {...props}>
-          {scratchStack.map((row, rowIndex) => (
-            <div className="scratch-stack-row" key={`scratch-row-${rowIndex}`}>
-              {row.map((chip, chipIndex) => (
-                <Fragment key={`scratch-chip-${rowIndex}-${chipIndex}-${chip.block}`}>
-                  <span className={`scratch-chip ${chip.className}`}>
-                    <span className="scratch-chip-category">{chip.category}</span>
-                    <span className="scratch-chip-arrow" aria-hidden="true">
-                      ›
-                    </span>
-                    <span className="scratch-chip-block">{chip.block}</span>
-                  </span>
-                  {chipIndex < row.length - 1 && (
-                    <span className="scratch-stack-arrow" aria-hidden="true">
-                      →
-                    </span>
-                  )}
-                </Fragment>
-              ))}
-            </div>
-          ))}
+          {(() => {
+            let stepCounter = 0;
+            const isNonActionControl = (row) =>
+              row.chips.length === 1 &&
+              row.chips[0].className === "scratch-control" &&
+              /^(else|end|kết thúc)/i.test(row.chips[0].block);
+
+            return scratchStack.map((row, rowIndex) => {
+              const isAction = !isNonActionControl(row);
+              const maybeStep = isAction ? (stepCounter += 1) : null;
+              return (
+                <div
+                  className="scratch-stack-row"
+                  key={`scratch-row-${rowIndex}`}
+                  style={{ paddingLeft: `${(row.indent || 0) * 18}px` }}
+                >
+                  {maybeStep && <span className="scratch-step" aria-hidden="true">{maybeStep}</span>}
+                  {row.chips.map((chip, chipIndex) => (
+                    <Fragment key={`scratch-chip-${rowIndex}-${chipIndex}-${chip.block}`}>
+                      <span className={`scratch-chip ${chip.className}`}>
+                        <span className="scratch-chip-category">{chip.category}</span>
+                        <span className="scratch-chip-arrow" aria-hidden="true">›</span>
+                        <span className="scratch-chip-block">{chip.block}</span>
+                      </span>
+                      {chipIndex < row.chips.length - 1 && (
+                        <span
+                          className="scratch-stack-arrow"
+                          aria-hidden="true"
+                          style={{ color: "rgba(15,23,42,0.35)" }}
+                        >
+                          →
+                        </span>
+                      )}
+                    </Fragment>
+                  ))}
+                </div>
+              );
+            });
+          })()}
         </div>
       );
     }
@@ -674,7 +708,7 @@ function AttachmentPreview({ attachment }) {
   );
 }
 
-function MessageBubble({ message }) {
+const MessageBubble = memo(function MessageBubble({ message }) {
   const isUser = message.role === "user";
   return (
     <div className={`message ${isUser ? "user" : "assistant"}`}>
@@ -703,7 +737,29 @@ function MessageBubble({ message }) {
       </div>
     </div>
   );
-}
+}, (prev, next) => {
+  const a = prev.message;
+  const b = next.message;
+  if (a === b) return true;
+  if (a.role !== b.role || a.content !== b.content) return false;
+  const aRefs = a.references || [];
+  const bRefs = b.references || [];
+  if (aRefs.length !== bRefs.length) return false;
+  const aAtt = a.attachments || [];
+  const bAtt = b.attachments || [];
+  if (aAtt.length !== bAtt.length) return false;
+  return true;
+});
+
+const MessagesList = memo(function MessagesList({ items, onScroll, chatRef }) {
+  return (
+    <section className="chat" ref={chatRef} onScroll={onScroll}>
+      {items.map((message, index) => (
+        <MessageBubble key={index} message={message} />
+      ))}
+    </section>
+  );
+});
 
 function StatusIndicator({ status }) {
   if (!status) {
@@ -733,6 +789,7 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
   const [input, setInput] = useState("");
+  const deferredInput = useDeferredValue(input);
   const [sb3Report, setSb3Report] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const chatRef = useRef(null);
@@ -741,7 +798,7 @@ export default function App() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showUploadPanel, setShowUploadPanel] = useState(false);
   const [showLegendPanel, setShowLegendPanel] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(true);
+  // suggestion UI removed
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [activeNavTab, setActiveNavTab] = useState("history");
   const [isDesktop, setIsDesktop] = useState(() => {
@@ -1349,7 +1406,7 @@ ${prompt}`;
       setAttachments([]);
       setInput("");
       setError(null);
-      setShowSuggestions(true);
+      // suggestion UI removed
       if (!isDesktop) {
         setIsNavOpen(false);
       }
@@ -1373,7 +1430,7 @@ ${prompt}`;
           setAttachments([]);
           setInput("");
           setError(null);
-          setShowSuggestions(true);
+      // suggestion UI removed
           setActiveNavTab("history");
           if (!isDesktop) {
             setIsNavOpen(false);
@@ -1392,7 +1449,7 @@ ${prompt}`;
           setAttachments([]);
           setInput("");
           setError(null);
-          setShowSuggestions(true);
+          // suggestion UI removed
           setActiveNavTab("history");
           if (!isDesktop) {
             setIsNavOpen(false);
@@ -1448,26 +1505,7 @@ ${prompt}`;
     return null;
   }, [messages]);
 
-  const dynamicSuggestionSection = useMemo(() => {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const message = messages[index];
-      if (message.role !== "assistant") {
-        continue;
-      }
-
-      const section = extractSuggestionsFromContent(message.content);
-      if (section?.suggestions?.length) {
-        return {
-          title: section.title || DEFAULT_SUGGESTION_SECTION.title,
-          suggestions: section.suggestions.slice(0, 6)
-        };
-      }
-    }
-    return null;
-  }, [messages]);
-
-  const { title: suggestionTitle, suggestions: suggestionPrompts } =
-    dynamicSuggestionSection ?? DEFAULT_SUGGESTION_SECTION;
+  // suggestion derivation removed
 
   const status = useMemo(() => {
     if (exporting) {
@@ -1476,11 +1514,11 @@ ${prompt}`;
     if (pending) {
       return { type: "thinking", label: "🤔 Cô MindX đang suy nghĩ câu trả lời hay nhất..." };
     }
-    if (input.trim().length > 0) {
+    if (deferredInput.trim().length > 0) {
       return { type: "typing", label: "✍️ Em đang gõ tin nhắn. Cứ thoải mái viết nhé!" };
     }
     return { type: "idle", label: "🌟 Cô luôn sẵn sàng lắng nghe." };
-  }, [exporting, pending, input]);
+  }, [exporting, pending, deferredInput]);
 
   const handleExportSb3 = async () => {
     if (!latestScratchContent || exporting) {
@@ -1532,12 +1570,8 @@ ${prompt}`;
               <h2>Điều hướng</h2>
               <p>Quản lý cuộc trò chuyện và cài đặt cá nhân.</p>
             </div>
-            <button
-              type="button"
-              className="nav-dashboard"
-              onClick={handleSwitchToAdmin}
-            >
-              🛠️ Dashboard
+            <button type="button" className="nav-dashboard" onClick={handleSwitchToAdmin}>
+              <Gauge size={16} style={{ marginRight: 6 }} /> Dashboard
             </button>
             <button
               type="button"
@@ -1545,7 +1579,7 @@ ${prompt}`;
               onClick={handleToggleNav}
               aria-label={isDesktop ? "Thu gọn điều hướng" : "Đóng điều hướng"}
             >
-              {isDesktop ? "<" : "×"}
+              {isDesktop ? "<" : <X size={18} />}
             </button>
           </div>
 
@@ -1613,7 +1647,7 @@ ${prompt}`;
                             }
                           }}
                         >
-                          ✏️
+                          <Pencil size={16} />
                         </button>
                         <button
                           type="button"
@@ -1626,7 +1660,7 @@ ${prompt}`;
                             }
                           }}
                         >
-                          🗑️
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </div>
@@ -1776,64 +1810,26 @@ ${prompt}`;
             </span>
             <div className="chat-toolbar-actions">
               <button type="button" className="toolbar-button" onClick={() => setShowUploadPanel(true)}>
-                📁 Tải dự án Scratch
+                <FolderUp size={16} style={{ marginRight: 8 }} /> Tải dự án Scratch
               </button>
               <button type="button" className="toolbar-button" onClick={() => setShowLegendPanel(true)}>
-                🎨 Xem khối Scratch
+                <Shapes size={16} style={{ marginRight: 8 }} /> Xem khối Scratch
               </button>
               <button type="button" className="toolbar-button subtle" onClick={handleSwitchToAdmin}>
-                🛠️ Dashboard
+                <Gauge size={16} style={{ marginRight: 8 }} /> Dashboard
               </button>
             </div>
           </div>
           <div className="chat-wrapper">
-            <section className="chat" ref={chatRef} onScroll={handleChatScroll}>
-              {messages.map((message, index) => (
-                <MessageBubble key={index} message={message} />
-              ))}
-            </section>
+            <MessagesList items={messages} onScroll={handleChatScroll} chatRef={chatRef} />
             {showScrollButton && (
-              <button
-                type="button"
-                className="chat-scroll-button"
-                onClick={() => scrollChatToBottom("smooth")}
-              >
-                📥 Xuống cuối trò chuyện
+              <button type="button" className="chat-scroll-button" onClick={() => scrollChatToBottom("smooth")}>
+                <ArrowDownToLine size={16} style={{ marginRight: 8 }} /> Xuống cuối trò chuyện
               </button>
             )}
           </div>
 
-          <div className={`card suggestion-card ${showSuggestions ? "open" : "collapsed"}`}>
-            <div className="suggestion-card-header">
-              <h2>{suggestionTitle}</h2>
-              <button
-                type="button"
-                className="suggestion-toggle"
-                onClick={() => setShowSuggestions((prev) => !prev)}
-                aria-expanded={showSuggestions}
-              >
-                {showSuggestions ? "Thu gọn" : "Mở ra"}
-                <span aria-hidden="true">{showSuggestions ? "▴" : "▾"}</span>
-              </button>
-            </div>
-            {showSuggestions && (
-              <>
-                <p>Chọn nhanh một câu phía dưới để hỏi lại cô MindX nhé.</p>
-                <div className="suggestion-buttons">
-                  {suggestionPrompts.map((prompt) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      className="suggestion-button"
-                      onClick={() => handleSuggestionClick(prompt)}
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          {/* suggestion card removed */}
         </div>
       </main>
 
@@ -1848,7 +1844,21 @@ ${prompt}`;
 
       <footer className="composer">
         <div className="composer-area">
-          <StatusIndicator status={status} />
+          <div className="composer-top-row">
+            <StatusIndicator status={status} />
+            <div className="inline-suggestions" role="list">
+              {INLINE_SUGGESTION_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  className="inline-suggestion"
+                  onClick={() => handleSuggestionClick(prompt)}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
           <textarea
             placeholder="Nhập câu hỏi cho cô MindX..."
             value={input}
@@ -1868,7 +1878,7 @@ ${prompt}`;
                       <img src={item.preview} alt={item.name} />
                     ) : (
                       <div className="composer-attachment-icon" aria-hidden="true">
-                        📄
+                        <FileText size={18} />
                       </div>
                     )}
                     <div className="composer-attachment-info">
@@ -1883,7 +1893,7 @@ ${prompt}`;
                       onClick={() => handleAttachmentRemove(item.id)}
                       aria-label={`Xóa tệp ${item.name}`}
                     >
-                      ×
+                      <X size={16} />
                     </button>
                   </div>
                 );
@@ -1900,7 +1910,7 @@ ${prompt}`;
 
         <div className="composer-buttons">
           <button type="button" className="secondary" onClick={handleAttachmentButton} disabled={pending}>
-            Đính kèm
+            <Paperclip size={16} style={{ marginRight: 8 }} /> Đính kèm
           </button>
           <button
             type="button"
@@ -1910,12 +1920,8 @@ ${prompt}`;
           >
             {exporting ? "Đang tạo .sb3..." : "Xuất .sb3"}
           </button>
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={pending || (input.trim().length === 0 && attachments.length === 0)}
-          >
-            {pending ? "Đang xử lý..." : "Gửi"}
+          <button type="button" onClick={handleSend} disabled={pending || (input.trim().length === 0 && attachments.length === 0)}>
+            {pending ? "Đang xử lý..." : (<><Send size={16} style={{ marginRight: 8 }} /> Gửi</>)}
           </button>
         </div>
       </footer>
@@ -1938,13 +1944,13 @@ ${prompt}`;
               onClick={() => setShowUploadPanel(false)}
               aria-label="Đóng tải dự án Scratch"
             >
-              ×
+              <X size={18} />
             </button>
             <div className="overlay-card">
               <h2>Tải dự án Scratch</h2>
               <p>Gửi tệp .sb3 để cô phân tích và góp ý cho em nhé.</p>
               <button type="button" onClick={() => fileInputRef.current?.click()} disabled={pending}>
-                Chọn tệp .sb3
+                <FolderUp size={16} style={{ marginRight: 8 }} /> Chọn tệp .sb3
               </button>
               <input
                 ref={fileInputRef}
@@ -1988,7 +1994,7 @@ ${prompt}`;
               onClick={() => setShowLegendPanel(false)}
               aria-label="Đóng thông tin khối Scratch"
             >
-              ×
+              <X size={18} />
             </button>
             <div className="overlay-card">
               <h2>Thông tin các khối Scratch</h2>

@@ -1,0 +1,73 @@
+/* Responsive styles for chat application */
+
+@media (max-width: 1200px) {
+  .nav-drawer.desktop.open {
+    flex: 0 0 30%;
+    max-width: 30%;
+  }
+}
+
+@media (max-width: 900px) {
+  main {
+    margin: 4px;
+  }
+
+  .chat-toolbar {
+    height: auto;
+    min-height: 60px;
+  }
+
+  footer {
+    height: 70px;
+    padding: 8px 16px;
+  }
+
+  footer textarea {
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  footer button {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 600px) {
+  main {
+    margin: 2px;
+    border-radius: 12px;
+  }
+
+  .chat-toolbar {
+    padding: 8px 16px;
+    height: auto;
+    min-height: 50px;
+  }
+
+  .chat {
+    padding: 16px;
+  }
+
+  footer {
+    height: 60px;
+    padding: 6px 12px;
+  }
+
+  footer textarea {
+    min-height: 36px;
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  footer button {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .composer-buttons {
+    min-width: 80px;
+    gap: 4px;
+  }
+}
+

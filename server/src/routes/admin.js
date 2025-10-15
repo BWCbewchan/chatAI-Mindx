@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { Router } from "express";
 import { getAnalyticsSnapshot } from "../analyticsStore.js";
+import { getAnalyticsSnapshotMongo } from "../analyticsStore.mongo.js";
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Mindx@2024";
@@ -70,7 +71,15 @@ export function createAdminRouter() {
     });
   });
 
-  router.get("/analytics", requireAdminAuth, (req, res) => {
+  router.get("/analytics", requireAdminAuth, async (req, res) => {
+    try {
+      const mongoAnalytics = await getAnalyticsSnapshotMongo();
+      if (mongoAnalytics) {
+        return res.json(mongoAnalytics);
+      }
+    } catch (err) {
+      console.warn("Không thể lấy analytics từ Mongo, fallback bộ nhớ:", err);
+    }
     const analytics = getAnalyticsSnapshot();
     return res.json(analytics);
   });

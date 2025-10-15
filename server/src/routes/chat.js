@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { Router } from "express";
 import multer from "multer";
 import { recordChatExchange } from "../analyticsStore.js";
+import { recordChatExchangeMongo } from "../analyticsStore.mongo.js";
 import { findRelevantChunks } from "../contextRetriever.js";
 
 export default function createChatRouter({ contextIndex, persona, apiKey, model }) {
@@ -283,7 +284,8 @@ export default function createChatRouter({ contextIndex, persona, apiKey, model 
       };
 
       try {
-        recordChatExchange({
+        // Prefer Mongo if available; fall back to in-memory store
+        const mongoResult = await recordChatExchangeMongo({
           sessionId,
           userMessage: { content: userLogContent },
           assistantMessage: { content: responseText },
@@ -292,6 +294,17 @@ export default function createChatRouter({ contextIndex, persona, apiKey, model 
           profile,
           references: referencesPayload
         });
+        if (!mongoResult) {
+          recordChatExchange({
+            sessionId,
+            userMessage: { content: userLogContent },
+            assistantMessage: { content: responseText },
+            attachments: attachmentsMetadata,
+            preferences,
+            profile,
+            references: referencesPayload
+          });
+        }
       } catch (analyticsError) {
         console.warn("Không thể ghi thống kê admin:", analyticsError);
       }
