@@ -111,7 +111,7 @@ export async function recordChatExchangeMongo({
 	return effectiveSessionId;
 }
 
-export async function getAnalyticsSnapshotMongo() {
+export async function getAnalyticsSnapshotMongo(classFilter = "") {
 	const db = getDb();
 	if (!db) return null;
 	const now = new Date();
@@ -120,7 +120,40 @@ export async function getAnalyticsSnapshotMongo() {
 	const refsCol = db.collection("references");
 	const keywordsCol = db.collection("keywords");
 
-	const sessions = await sessionsCol.find({}).toArray();
+	let query = {};
+	
+	// Filter sessions by class if classFilter is provided
+	if (classFilter) {
+		console.log(`[DEBUG] MongoDB filtering by class: "${classFilter}"`);
+		const normalizedFilter = classFilter.toLowerCase();
+		
+		// Case 1: Filter by center (TK, HN, etc.) - short codes (≤3 chars)
+		if (normalizedFilter.length <= 3) {
+			query = {
+				$or: [
+					// Match center code at start (TK-C4K-SB24)
+					{ "latestProfile.grade": { $regex: `^${classFilter}-`, $options: "i" } },
+					// Direct match for old format
+					{ "latestProfile.grade": { $regex: classFilter, $options: "i" } }
+				]
+			};
+		}
+		// Case 2: Filter by class code (SB24, SA15, etc.) - longer codes (>3 chars)
+		else {
+			query = {
+				$or: [
+					// Priority 1: Exact match for new format (TK-C4K-SB24 -> SB24)
+					{ "latestProfile.grade": { $regex: `-${classFilter}$`, $options: "i" } },
+					// Priority 2: Direct match (old format: L5A1, L6B2)
+					{ "latestProfile.grade": { $regex: classFilter, $options: "i" } }
+				]
+			};
+		}
+	}
+
+	console.log(`[DEBUG] MongoDB query:`, JSON.stringify(query, null, 2));
+	const sessions = await sessionsCol.find(query).toArray();
+	console.log(`[DEBUG] MongoDB sessions found: ${sessions.length}`);
 	const summary = {
 		totalSessions: sessions.length,
 		activeSessions24h: 0,
@@ -131,7 +164,13 @@ export async function getAnalyticsSnapshotMongo() {
 		attachmentsUploaded: sessions.reduce((n, s) => n + (s.attachmentCount || 0), 0),
 		sessionsWithAttachments: sessions.filter((s) => s.hasAttachment).length,
 		firstMessageAt: null,
-		lastMessageAt: null
+		lastMessageAt: null,
+		// New detailed stats
+		totalClasses: 0,
+		totalStudents: 0,
+		centerStats: [],
+		classStats: [],
+		studentStats: []
 	};
 
 	const uniqueLearnerSet = new Set();
@@ -139,6 +178,13 @@ export async function getAnalyticsSnapshotMongo() {
 	const gradeCounts = new Map();
 	const goalCounts = new Map();
 	const favoriteTopicCounts = new Map();
+	
+	// New detailed stats collections
+	const centerStats = new Map();
+	const classStats = new Map();
+	const studentStats = new Map();
+	const uniqueClasses = new Set();
+	const uniqueStudents = new Set();
 	const toneCounts = new Map();
 	const detailCounts = new Map();
 	let includeScratchTrue = 0;
@@ -160,7 +206,36 @@ export async function getAnalyticsSnapshotMongo() {
 			const learnerKey = `${(profile.name || "").trim().toLowerCase()}|${(profile.grade || "").trim().toLowerCase()}`;
 			if (learnerKey.trim() !== "|") uniqueLearnerSet.add(learnerKey);
 			if (profile.program) programCounts.set(profile.program, (programCounts.get(profile.program) || 0) + 1);
-			if (profile.grade) gradeCounts.set(profile.grade, (gradeCounts.get(profile.grade) || 0) + 1);
+			if (profile.grade) {
+			gradeCounts.set(profile.grade, (gradeCounts.get(profile.grade) || 0) + 1);
+			
+			// Extract center and class for detailed stats
+			const grade = profile.grade.trim();
+			const parts = grade.split('-');
+			
+			// Extract center (first part)
+			if (parts.length > 0) {
+				const center = parts[0];
+				centerStats.set(center, (centerStats.get(center) || 0) + 1);
+			}
+			
+			// Extract class (last part)
+			if (parts.length > 1) {
+				const classCode = parts[parts.length - 1];
+				classStats.set(classCode, (classStats.get(classCode) || 0) + 1);
+				uniqueClasses.add(classCode);
+			} else {
+				// Old format - use entire grade as class
+				classStats.set(grade, (classStats.get(grade) || 0) + 1);
+				uniqueClasses.add(grade);
+			}
+		}
+		
+		if (profile.name) {
+			const studentName = profile.name.trim();
+			studentStats.set(studentName, (studentStats.get(studentName) || 0) + 1);
+			uniqueStudents.add(studentName);
+		}
 			if (profile.goal) goalCounts.set(profile.goal, (goalCounts.get(profile.goal) || 0) + 1);
 			if (profile.favoriteTopics) {
 				for (const t of profile.favoriteTopics.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean)) {
@@ -178,6 +253,13 @@ export async function getAnalyticsSnapshotMongo() {
 	}
 
 	summary.uniqueLearners = uniqueLearnerSet.size;
+	
+	// Calculate detailed stats
+	summary.totalClasses = uniqueClasses.size;
+	summary.totalStudents = uniqueStudents.size;
+	summary.centerStats = Array.from(centerStats.entries()).map(([label, count]) => ({ label, count }));
+	summary.classStats = Array.from(classStats.entries()).map(([label, count]) => ({ label, count }));
+	summary.studentStats = Array.from(studentStats.entries()).map(([label, count]) => ({ label, count }));
 	if (summary.totalSessions > 0) {
 		summary.averageMessagesPerSession = Number(
 			((summary.userMessages + summary.assistantMessages) / summary.totalSessions).toFixed(1)

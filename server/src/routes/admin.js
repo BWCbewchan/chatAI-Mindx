@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { Router } from "express";
 import { getAnalyticsSnapshot } from "../analyticsStore.js";
 import { getAnalyticsSnapshotMongo } from "../analyticsStore.mongo.js";
+import { getDb } from "../mongo.js";
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Mindx@2024";
@@ -73,14 +74,16 @@ export function createAdminRouter() {
 
   router.get("/analytics", requireAdminAuth, async (req, res) => {
     try {
-      const mongoAnalytics = await getAnalyticsSnapshotMongo();
+      const classFilter = req.query.classFilter || "";
+      const mongoAnalytics = await getAnalyticsSnapshotMongo(classFilter);
       if (mongoAnalytics) {
         return res.json(mongoAnalytics);
       }
     } catch (err) {
       console.warn("Không thể lấy analytics từ Mongo, fallback bộ nhớ:", err);
     }
-    const analytics = getAnalyticsSnapshot();
+    const classFilter = req.query.classFilter || "";
+    const analytics = getAnalyticsSnapshot(classFilter);
     return res.json(analytics);
   });
 
@@ -89,6 +92,76 @@ export function createAdminRouter() {
       activeTokens.delete(req.adminToken);
     }
     return res.status(204).send();
+  });
+
+  router.get("/student-chat/:studentName", requireAdminAuth, async (req, res) => {
+    try {
+      const { studentName } = req.params;
+      const { classFilter } = req.query;
+      
+      console.log(`[DEBUG] Getting chat history for student: ${studentName}, classFilter: ${classFilter}`);
+      
+      // Get chat history from MongoDB
+      const db = getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+      
+      const sessionsCol = db.collection("sessions");
+      const messagesCol = db.collection("messages");
+      
+      // Build query for sessions
+      let sessionQuery = {
+        "latestProfile.name": { $regex: studentName, $options: "i" }
+      };
+      
+      // Add class filter if provided
+      if (classFilter) {
+        const normalizedFilter = classFilter.toLowerCase();
+        if (normalizedFilter.length <= 3) {
+          // Center filter
+          sessionQuery["latestProfile.grade"] = { $regex: `^${classFilter}-`, $options: "i" };
+        } else {
+          // Class filter
+          sessionQuery["latestProfile.grade"] = { $regex: `-${classFilter}$`, $options: "i" };
+        }
+      }
+      
+      console.log(`[DEBUG] Session query:`, JSON.stringify(sessionQuery, null, 2));
+      
+      // Find sessions for this student
+      const sessions = await sessionsCol.find(sessionQuery).toArray();
+      console.log(`[DEBUG] Found ${sessions.length} sessions for student ${studentName}`);
+      
+      if (sessions.length === 0) {
+        return res.json([]);
+      }
+      
+      const sessionIds = sessions.map(s => s.id);
+      
+      // Get messages for these sessions
+      const messages = await messagesCol
+        .find({ sessionId: { $in: sessionIds } })
+        .sort({ timestamp: 1 })
+        .toArray();
+      
+      console.log(`[DEBUG] Found ${messages.length} messages for student ${studentName}`);
+      
+      // Format messages for frontend
+      const chatHistory = messages.map(msg => ({
+        id: msg._id.toString(),
+        timestamp: msg.timestamp,
+        role: msg.role,
+        content: msg.content,
+        sessionId: msg.sessionId
+      }));
+      
+      return res.json(chatHistory);
+      
+    } catch (error) {
+      console.error("Error getting student chat history:", error);
+      return res.status(500).json({ error: "Failed to get chat history" });
+    }
   });
 
   return router;

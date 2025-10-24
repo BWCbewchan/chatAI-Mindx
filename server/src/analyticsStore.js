@@ -208,9 +208,57 @@ function mapToList(map) {
   return Array.from(map.entries()).map(([label, count]) => ({ label, count }));
 }
 
-export function getAnalyticsSnapshot() {
+export function getAnalyticsSnapshot(classFilter = "") {
   const now = new Date();
-  const sessionsArray = Array.from(sessions.values());
+  let sessionsArray = Array.from(sessions.values());
+  
+  // Filter sessions by class if classFilter is provided
+  if (classFilter) {
+    console.log(`[DEBUG] Filtering by class: "${classFilter}"`);
+    console.log(`[DEBUG] Total sessions before filter: ${sessionsArray.length}`);
+    
+    sessionsArray = sessionsArray.filter(session => {
+      const profile = session.latestProfile || {};
+      const grade = profile.grade || "";
+      
+      console.log(`[DEBUG] Session ${session.id}: grade="${grade}", profile=`, profile);
+      
+      const normalizedGrade = grade.toLowerCase();
+      const normalizedFilter = classFilter.toLowerCase();
+      
+      // Case 1: Filter by center (TK, HN, etc.) - short codes (≤3 chars)
+      if (normalizedFilter.length <= 3) {
+        // Check if grade starts with the center code (TK-C4K-SB24)
+        if (normalizedGrade.startsWith(normalizedFilter + '-')) {
+          return true;
+        }
+        // Also check direct match for old format
+        if (normalizedGrade.includes(normalizedFilter)) {
+          return true;
+        }
+      }
+      
+      // Case 2: Filter by class code (SB24, SA15, etc.) - longer codes (>3 chars)
+      else {
+        // Priority 1: Check if grade ends with the filter (for new format TK-C4K-SB24)
+        // Extract the last part after the last dash - this is the actual class code
+        const parts = normalizedGrade.split('-');
+        const lastPart = parts[parts.length - 1];
+        if (lastPart === normalizedFilter) {
+          return true;
+        }
+        
+        // Priority 2: Check if grade contains the filter (for old format)
+        if (normalizedGrade.includes(normalizedFilter)) {
+          return true;
+        }
+      }
+      
+      return false;
+    });
+    
+    console.log(`[DEBUG] Sessions after filter: ${sessionsArray.length}`);
+  }
 
   const summary = {
     totalSessions: sessionsArray.length,
@@ -222,7 +270,13 @@ export function getAnalyticsSnapshot() {
     attachmentsUploaded: totalAttachmentCount,
     sessionsWithAttachments: 0,
     firstMessageAt: null,
-    lastMessageAt: null
+    lastMessageAt: null,
+    // New detailed stats
+    totalClasses: 0,
+    totalStudents: 0,
+    centerStats: {},
+    classStats: {},
+    studentStats: {}
   };
 
   const uniqueLearnerSet = new Set();
@@ -230,6 +284,13 @@ export function getAnalyticsSnapshot() {
   const gradeCounts = new Map();
   const goalCounts = new Map();
   const favoriteTopicCounts = new Map();
+  
+  // New detailed stats collections
+  const centerStats = new Map();
+  const classStats = new Map();
+  const studentStats = new Map();
+  const uniqueClasses = new Set();
+  const uniqueStudents = new Set();
   const toneCounts = new Map();
   const detailCounts = new Map();
   let includeScratchTrue = 0;
@@ -273,6 +334,33 @@ export function getAnalyticsSnapshot() {
 
       if (profile.grade) {
         incrementMap(gradeCounts, profile.grade.trim());
+        
+        // Extract center and class for detailed stats
+        const grade = profile.grade.trim();
+        const parts = grade.split('-');
+        
+        // Extract center (first part)
+        if (parts.length > 0) {
+          const center = parts[0];
+          incrementMap(centerStats, center);
+        }
+        
+        // Extract class (last part)
+        if (parts.length > 1) {
+          const classCode = parts[parts.length - 1];
+          incrementMap(classStats, classCode);
+          uniqueClasses.add(classCode);
+        } else {
+          // Old format - use entire grade as class
+          incrementMap(classStats, grade);
+          uniqueClasses.add(grade);
+        }
+      }
+
+      if (profile.name) {
+        const studentName = profile.name.trim();
+        incrementMap(studentStats, studentName);
+        uniqueStudents.add(studentName);
       }
 
       if (profile.goal) {
@@ -313,6 +401,13 @@ export function getAnalyticsSnapshot() {
       ((summary.userMessages + summary.assistantMessages) / summary.totalSessions).toFixed(1)
     );
   }
+  
+  // Calculate detailed stats
+  summary.totalClasses = uniqueClasses.size;
+  summary.totalStudents = uniqueStudents.size;
+  summary.centerStats = mapToList(centerStats);
+  summary.classStats = mapToList(classStats);
+  summary.studentStats = mapToList(studentStats);
 
   const hourlyBuckets = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
   const dayLabels = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];

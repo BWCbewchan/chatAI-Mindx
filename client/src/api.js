@@ -143,8 +143,12 @@ export async function loginAdmin({ username, password }) {
   });
 }
 
-export async function fetchAdminAnalytics(token) {
-  return request("/api/admin/analytics", {
+export async function fetchAdminAnalytics(token, classFilter = "") {
+  const url = classFilter 
+    ? `/api/admin/analytics?classFilter=${encodeURIComponent(classFilter)}`
+    : "/api/admin/analytics";
+  
+  return request(url, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`
@@ -155,6 +159,19 @@ export async function fetchAdminAnalytics(token) {
 export async function logoutAdmin(token) {
   return request("/api/admin/logout", {
     method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function getStudentChatHistory(token, studentName, classFilter = "") {
+  const url = classFilter 
+    ? `/api/admin/student-chat/${encodeURIComponent(studentName)}?classFilter=${encodeURIComponent(classFilter)}`
+    : `/api/admin/student-chat/${encodeURIComponent(studentName)}`;
+  
+  return request(url, {
+    method: "GET",
     headers: {
       Authorization: `Bearer ${token}`
     }

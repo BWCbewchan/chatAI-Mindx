@@ -7,6 +7,7 @@ import {
     checkServerHealth,
     exportSb3FromChat,
     fetchAdminAnalytics,
+    getStudentChatHistory,
     loginAdmin,
     logoutAdmin,
     NETWORK_ERROR_MESSAGE,
@@ -127,6 +128,7 @@ const DEFAULT_PROFILE = {
   program: "SB",
   name: "",
   grade: "",
+  age: "",
   goal: "",
   favoriteTopics: "",
   notes: ""
@@ -822,6 +824,14 @@ export default function App() {
   const [analyticsError, setAnalyticsError] = useState(null);
   const [analyticsLastUpdated, setAnalyticsLastUpdated] = useState(null);
   const [serverOnline, setServerOnline] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [classFilter, setClassFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+  const [selectedClass, setSelectedClass] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState("");
+  const [studentModalOpen, setStudentModalOpen] = useState(false);
+  const [studentChatHistory, setStudentChatHistory] = useState([]);
+  const [studentChatLoading, setStudentChatLoading] = useState(false);
 
   const isAdminAuthenticated = Boolean(adminToken);
   const numberFormatter = useMemo(() => new Intl.NumberFormat("vi-VN"), []);
@@ -945,6 +955,20 @@ export default function App() {
       window.sessionStorage.removeItem("mindx-admin-token");
     }
   }, [adminToken]);
+
+  // Kiểm tra thông tin profile khi component mount
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const isProfileComplete = userProfile.name.trim() && userProfile.grade.trim() && userProfile.age.trim();
+    if (!isProfileComplete && activeView === "chat" && !isAdminAuthenticated) {
+      setShowProfileModal(true);
+    } else if (isProfileComplete || activeView === "admin") {
+      setShowProfileModal(false);
+    }
+  }, [userProfile, activeView, isAdminAuthenticated]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1079,7 +1103,7 @@ export default function App() {
   }, []);
 
   const retrieveAnalytics = useCallback(
-    async (tokenOverride) => {
+    async (tokenOverride, classFilterParam) => {
       const effectiveToken = tokenOverride ?? adminToken;
       if (!effectiveToken) {
         return;
@@ -1089,7 +1113,7 @@ export default function App() {
       setAnalyticsError(null);
 
       try {
-        const data = await fetchAdminAnalytics(effectiveToken);
+        const data = await fetchAdminAnalytics(effectiveToken, classFilterParam);
         setAnalyticsData(data);
         setAnalyticsLastUpdated(Date.now());
         setServerOnline(true);
@@ -1182,7 +1206,61 @@ export default function App() {
   const handleReturnToChat = useCallback(() => {
     navigate("/");
     setAnalyticsError(null);
-  }, [navigate]);
+    // Kiểm tra lại profile khi quay về chat
+    const isProfileComplete = userProfile.name.trim() && userProfile.grade.trim() && userProfile.age.trim();
+    if (!isProfileComplete) {
+      setShowProfileModal(true);
+    }
+  }, [navigate, userProfile]);
+
+  const handleClassFilterChange = useCallback((value) => {
+    setClassFilter(value);
+  }, []);
+
+  const handleClassClick = useCallback((classCode) => {
+    if (selectedClass === classCode) {
+      // Toggle off - clear selection
+      setSelectedClass("");
+      setClassFilter("");
+    } else {
+      // Select new class
+      setSelectedClass(classCode);
+      setClassFilter(classCode);
+    }
+  }, [selectedClass]);
+
+  const handleStudentClick = useCallback(async (studentName) => {
+    setSelectedStudent(studentName);
+    setStudentModalOpen(true);
+    setStudentChatLoading(true);
+    
+    try {
+      const chatHistory = await getStudentChatHistory(adminToken, studentName, classFilter);
+      setStudentChatHistory(chatHistory);
+    } catch (error) {
+      console.error("Error loading student chat history:", error);
+      setStudentChatHistory([]);
+    } finally {
+      setStudentChatLoading(false);
+    }
+  }, [adminToken, classFilter]);
+
+  const handleCloseStudentModal = useCallback(() => {
+    setStudentModalOpen(false);
+    setSelectedStudent("");
+    setStudentChatHistory([]);
+  }, []);
+
+  // Auto-apply filter with debounce
+  useEffect(() => {
+    if (!adminToken) return;
+    
+    const timeoutId = setTimeout(() => {
+      retrieveAnalytics(adminToken, classFilter);
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [classFilter, adminToken, retrieveAnalytics]);
 
   const handleToggleNav = useCallback(() => {
     setIsNavOpen((prev) => !prev);
@@ -1232,7 +1310,7 @@ export default function App() {
 
   const handleSend = async () => {
     const messageContent = input.trim();
-    if ((messageContent.length === 0 && attachments.length === 0) || pending) return;
+    if ((messageContent.length === 0 && attachments.length === 0) || pending || showProfileModal) return;
 
     const displayContent = messageContent || "*(Không có nội dung, chỉ gửi tệp đính kèm)*";
     const messageForModel = messageContent || "Học sinh không nhập câu hỏi mà chỉ gửi tệp đính kèm.";
@@ -1378,7 +1456,8 @@ ${prompt}`;
     setAttachments([]);
     setInput("");
     setError(null);
-    setShowSuggestions(true);
+    // Hiển thị modal profile khi tạo session mới
+    setShowProfileModal(true);
     if (!isDesktop) {
       setIsNavOpen(false);
     }
@@ -1484,11 +1563,21 @@ ${prompt}`;
   }, []);
 
   const handleProfileChange = useCallback((field, value) => {
-    setUserProfile((prev) => ({
-      ...prev,
-      [field]: value
-    }));
-  }, []);
+    setUserProfile((prev) => {
+      const updated = {
+        ...prev,
+        [field]: value
+      };
+      
+      // Kiểm tra nếu profile đã đầy đủ thì đóng modal
+      const isProfileComplete = updated.name.trim() && updated.grade.trim() && updated.age.trim();
+      if (isProfileComplete && showProfileModal) {
+        setShowProfileModal(false);
+      }
+      
+      return updated;
+    });
+  }, [showProfileModal]);
 
   const latestScratchContent = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -1745,13 +1834,25 @@ ${prompt}`;
                 </div>
 
                 <div className="nav-field">
-                  <label htmlFor="profile-grade">Lớp / độ tuổi</label>
+                  <label htmlFor="profile-grade">Lớp</label>
                   <input
                     id="profile-grade"
                     type="text"
                     value={userProfile.grade}
                     onChange={(event) => handleProfileChange("grade", event.target.value)}
-                    placeholder="VD: Lớp 5 / 10 tuổi"
+                    placeholder="VD: Lớp 5"
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="nav-field">
+                  <label htmlFor="profile-age">Độ tuổi</label>
+                  <input
+                    id="profile-age"
+                    type="text"
+                    value={userProfile.age}
+                    onChange={(event) => handleProfileChange("age", event.target.value)}
+                    placeholder="VD: 10 tuổi"
                     autoComplete="off"
                   />
                 </div>
@@ -1860,12 +1961,12 @@ ${prompt}`;
             </div>
           </div>
           <textarea
-            placeholder="Nhập câu hỏi cho cô MindX..."
+            placeholder={showProfileModal ? "Vui lòng điền thông tin học viên trước khi sử dụng chat..." : "Nhập câu hỏi cho cô MindX..."}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePasteIntoComposer}
-            disabled={pending}
+            disabled={pending || showProfileModal}
           />
 
           {attachments.length > 0 && (
@@ -1909,18 +2010,18 @@ ${prompt}`;
         </div>
 
         <div className="composer-buttons">
-          <button type="button" className="secondary" onClick={handleAttachmentButton} disabled={pending}>
+          <button type="button" className="secondary" onClick={handleAttachmentButton} disabled={pending || showProfileModal}>
             <Paperclip size={16} style={{ marginRight: 8 }} /> Đính kèm
           </button>
           <button
             type="button"
             className="secondary"
             onClick={handleExportSb3}
-            disabled={pending || exporting || !latestScratchContent}
+            disabled={pending || exporting || !latestScratchContent || showProfileModal}
           >
             {exporting ? "Đang tạo .sb3..." : "Xuất .sb3"}
           </button>
-          <button type="button" onClick={handleSend} disabled={pending || (input.trim().length === 0 && attachments.length === 0)}>
+          <button type="button" onClick={handleSend} disabled={pending || showProfileModal || (input.trim().length === 0 && attachments.length === 0)}>
             {pending ? "Đang xử lý..." : (<><Send size={16} style={{ marginRight: 8 }} /> Gửi</>)}
           </button>
         </div>
@@ -1928,7 +2029,7 @@ ${prompt}`;
 
       {showUploadPanel && (
         <div
-          className="overlay"
+          className="overlay upload-modal-overlay"
           role="dialog"
           aria-modal="true"
           onClick={(event) => {
@@ -1937,40 +2038,56 @@ ${prompt}`;
             }
           }}
         >
-          <div className="overlay-content">
-            <button
-              type="button"
-              className="overlay-close"
-              onClick={() => setShowUploadPanel(false)}
-              aria-label="Đóng tải dự án Scratch"
-            >
-              <X size={18} />
-            </button>
-            <div className="overlay-card">
-              <h2>Tải dự án Scratch</h2>
-              <p>Gửi tệp .sb3 để cô phân tích và góp ý cho em nhé.</p>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={pending}>
-                <FolderUp size={16} style={{ marginRight: 8 }} /> Chọn tệp .sb3
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".sb3"
-                style={{ display: "none" }}
-                onChange={handleFileChange}
-              />
-              {sb3Report && (
-                <div className="sb3-report">
-                  <h3>Báo cáo tóm tắt</h3>
-                  <p>Tổng quan: {sb3Report.summary.spriteCount} nhân vật.</p>
-                  {!!sb3Report.summary.emptySprites?.length && (
-                    <p>Nhân vật chưa có chương trình: {sb3Report.summary.emptySprites.join(", ")}</p>
-                  )}
-                  <button type="button" className="link" onClick={clearSb3Report}>
-                    Xóa báo cáo
-                  </button>
+          <div className="overlay-content upload-modal-content">
+            <div className="overlay-card upload-modal-card">
+              <div className="upload-modal-header">
+                <div className="upload-modal-icon">📁</div>
+                <div className="upload-modal-title-section">
+                  <h2>Tải dự án Scratch</h2>
+                  <p>Gửi tệp .sb3 để cô phân tích và góp ý cho em nhé.</p>
                 </div>
-              )}
+                <button
+                  type="button"
+                  className="overlay-close"
+                  onClick={() => setShowUploadPanel(false)}
+                  aria-label="Đóng tải dự án Scratch"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              
+              <div className="upload-modal-body">
+                <button 
+                  type="button" 
+                  className="upload-button"
+                  onClick={() => fileInputRef.current?.click()} 
+                  disabled={pending}
+                >
+                  <FolderUp size={20} />
+                  <span>Chọn tệp .sb3</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".sb3"
+                  style={{ display: "none" }}
+                  onChange={handleFileChange}
+                />
+                {sb3Report && (
+                  <div className="sb3-report">
+                    <h3>📊 Báo cáo tóm tắt</h3>
+                    <div className="sb3-summary">
+                      <p><strong>Tổng quan:</strong> {sb3Report.summary.spriteCount} nhân vật</p>
+                      {!!sb3Report.summary.emptySprites?.length && (
+                        <p><strong>Nhân vật chưa có chương trình:</strong> {sb3Report.summary.emptySprites.join(", ")}</p>
+                      )}
+                    </div>
+                    <button type="button" className="clear-report-button" onClick={clearSb3Report}>
+                      🗑️ Xóa báo cáo
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1978,7 +2095,7 @@ ${prompt}`;
 
       {showLegendPanel && (
         <div
-          className="overlay"
+          className="overlay legend-modal-overlay"
           role="dialog"
           aria-modal="true"
           onClick={(event) => {
@@ -1987,30 +2104,166 @@ ${prompt}`;
             }
           }}
         >
-          <div className="overlay-content">
-            <button
-              type="button"
-              className="overlay-close"
-              onClick={() => setShowLegendPanel(false)}
-              aria-label="Đóng thông tin khối Scratch"
-            >
-              <X size={18} />
-            </button>
-            <div className="overlay-card">
-              <h2>Thông tin các khối Scratch</h2>
-              <p>Nhìn vào màu sắc để đoán nhóm lệnh. Cô dùng chip màu giống trong Scratch.</p>
-              <ul className="legend-list">
-                {SCRATCH_LEGEND.map((item) => (
-                  <li key={item.category} className="legend-item">
-                    <span className={`scratch-chip ${item.className}`}>{item.example}</span>
-                    <strong>{item.category}</strong>
-                    <span className="legend-desc">{item.description}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="legend-note">
-                Trong tin nhắn, cô MindX luôn ghi theo dạng <code>Category &gt; Block</code> để em nhận ra nhanh.
-              </p>
+          <div className="overlay-content legend-modal-content">
+            <div className="overlay-card legend-modal-card">
+              <div className="legend-modal-header">
+                <div className="legend-modal-icon">🧩</div>
+                <div className="legend-modal-title-section">
+                  <h2>Thông tin các khối Scratch</h2>
+                  <p>Nhìn vào màu sắc để đoán nhóm lệnh. Cô dùng chip màu giống trong Scratch.</p>
+                </div>
+                <button
+                  type="button"
+                  className="overlay-close"
+                  onClick={() => setShowLegendPanel(false)}
+                  aria-label="Đóng thông tin khối Scratch"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              
+              <div className="legend-modal-body">
+                <ul className="legend-list">
+                  {SCRATCH_LEGEND.map((item) => (
+                    <li key={item.category} className="legend-item">
+                      <span className={`scratch-chip ${item.className}`}>{item.example}</span>
+                      <div className="legend-item-content">
+                        <strong>{item.category}</strong>
+                        <span className="legend-desc">{item.description}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="legend-note">
+                  <div className="note-icon">💡</div>
+                  <p>
+                    Trong tin nhắn, cô MindX luôn ghi theo dạng <code>Category &gt; Block</code> để em nhận ra nhanh.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showProfileModal && (
+        <div
+          className="overlay profile-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="profile-modal-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              // Không cho phép đóng modal bằng click outside
+              return;
+            }
+          }}
+        >
+          <div className="overlay-content profile-modal-content">
+            <div className="overlay-card profile-modal-card">
+              <div className="profile-modal-header">
+                <h2 id="profile-modal-title">👤 Thông tin học viên</h2>
+                <p>Để sử dụng chat với cô MindX, em cần điền đầy đủ thông tin cá nhân nhé!</p>
+              </div>
+              
+              <div className="profile-modal-form">
+                <div className="form-group">
+                  <label htmlFor="modal-profile-name">
+                    Tên của em <span className="required">*</span>
+                  </label>
+                  <input
+                    id="modal-profile-name"
+                    type="text"
+                    value={userProfile.name}
+                    onChange={(event) => handleProfileChange("name", event.target.value)}
+                    placeholder="Nhập tên của em"
+                    autoComplete="off"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="modal-profile-grade">
+                    Lớp <span className="required">*</span>
+                  </label>
+                  <input
+                    id="modal-profile-grade"
+                    type="text"
+                    value={userProfile.grade}
+                    onChange={(event) => handleProfileChange("grade", event.target.value)}
+                    placeholder="VD: Lớp 5"
+                    autoComplete="off"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="modal-profile-age">
+                    Độ tuổi <span className="required">*</span>
+                  </label>
+                  <input
+                    id="modal-profile-age"
+                    type="text"
+                    value={userProfile.age}
+                    onChange={(event) => handleProfileChange("age", event.target.value)}
+                    placeholder="VD: 10 tuổi"
+                    autoComplete="off"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="modal-profile-program">Khóa học</label>
+                  <select
+                    id="modal-profile-program"
+                    value={userProfile.program || ""}
+                    onChange={(event) => handleProfileChange("program", event.target.value)}
+                  >
+                    <option value="SB">SB - Scratch Beginner</option>
+                    <option value="SA">SA - Scratch Advanced</option>
+                    <option value="SI">SI - Scratch Intensive</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="modal-profile-goal">Mục tiêu hiện tại</label>
+                  <input
+                    id="modal-profile-goal"
+                    type="text"
+                    value={userProfile.goal}
+                    onChange={(event) => handleProfileChange("goal", event.target.value)}
+                    placeholder="Ví dụ: Hoàn thành dự án buổi 08"
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="modal-profile-topics">Chủ đề em thích</label>
+                  <input
+                    id="modal-profile-topics"
+                    type="text"
+                    value={userProfile.favoriteTopics}
+                    onChange={(event) => handleProfileChange("favoriteTopics", event.target.value)}
+                    placeholder="Ví dụ: Game bắn máy bay, robot, toán"
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="modal-profile-notes">Ghi chú cho cô MindX</label>
+                  <textarea
+                    id="modal-profile-notes"
+                    value={userProfile.notes}
+                    onChange={(event) => handleProfileChange("notes", event.target.value)}
+                    placeholder="Ví dụ: Em đang chuẩn bị thi MindX Challenge."
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="profile-modal-note">
+                <p><strong>Lưu ý:</strong> Các trường có dấu <span className="required">*</span> là bắt buộc. Thông tin này giúp cô MindX hiểu em hơn và đưa ra lời khuyên phù hợp.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -2070,6 +2323,16 @@ ${prompt}`;
               numberFormatter={numberFormatter}
               dateTimeFormatter={dateTimeFormatter}
               shortDateFormatter={shortDateFormatter}
+              classFilter={classFilter}
+              onClassFilterChange={handleClassFilterChange}
+              selectedClass={selectedClass}
+              onClassClick={handleClassClick}
+              selectedStudent={selectedStudent}
+              onStudentClick={handleStudentClick}
+              studentModalOpen={studentModalOpen}
+              onCloseStudentModal={handleCloseStudentModal}
+              studentChatHistory={studentChatHistory}
+              studentChatLoading={studentChatLoading}
             />
           }
         />

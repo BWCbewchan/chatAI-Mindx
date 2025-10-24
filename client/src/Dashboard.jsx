@@ -1,9 +1,9 @@
+import { useEffect, useState } from "react";
 import {
 	Bar,
 	BarChart,
 	CartesianGrid,
 	Cell,
-	Legend,
 	Line,
 	LineChart,
 	Pie,
@@ -57,8 +57,71 @@ export default function Dashboard({
 	onLogout,
 	numberFormatter,
 	dateTimeFormatter,
-	shortDateFormatter
+	shortDateFormatter,
+	classFilter,
+	onClassFilterChange,
+	selectedClass,
+	onClassClick,
+	selectedStudent,
+	onStudentClick,
+	studentModalOpen,
+	onCloseStudentModal,
+	studentChatHistory,
+	studentChatLoading
 }) {
+	const [activeSection, setActiveSection] = useState("filter-section");
+
+	useEffect(() => {
+		// Use Intersection Observer for better performance and accuracy
+		const observerOptions = {
+			root: null,
+			rootMargin: "-20% 0px -60% 0px", // Trigger when section is in upper 20-40% of viewport
+			threshold: 0
+		};
+
+		const observerCallback = (entries) => {
+			entries.forEach((entry) => {
+				if (entry.isIntersecting) {
+					const sectionId = entry.target.id;
+					setActiveSection(sectionId);
+					console.log("Active section:", sectionId);
+				}
+			});
+		};
+
+		const observer = new IntersectionObserver(observerCallback, observerOptions);
+
+		// Observe all sections
+		const sections = [
+			"filter-section",
+			"detailed-stats",
+			"activity-overview",
+			"study-time",
+			"topics",
+			"grade-distribution",
+			"student-profile",
+			"recent-sessions",
+			"recent-messages"
+		];
+
+		sections.forEach((sectionId) => {
+			const element = document.getElementById(sectionId);
+			if (element) {
+				observer.observe(element);
+			}
+		});
+
+		// Cleanup
+		return () => {
+			sections.forEach((sectionId) => {
+				const element = document.getElementById(sectionId);
+				if (element) {
+					observer.unobserve(element);
+				}
+			});
+		};
+	}, []);
+
 	const allowDashboard = isAdminAuthenticated;
 
 	if (!allowDashboard) {
@@ -152,8 +215,6 @@ export default function Dashboard({
 
 	const toneDistribution = Array.isArray(audience.preferences?.tone) ? audience.preferences.tone : [];
 	const detailDistribution = Array.isArray(audience.preferences?.detail) ? audience.preferences.detail : [];
-	const includeScratchSteps = audience.preferences?.includeScratchSteps ?? { true: 0, false: 0 };
-	const includePracticeIdeas = audience.preferences?.includePracticeIdeas ?? { true: 0, false: 0 };
 
 	const toneChartData = toneDistribution.map((item, index) => ({
 		name: item.label,
@@ -161,21 +222,18 @@ export default function Dashboard({
 		color: PIE_COLORS[index % PIE_COLORS.length]
 	}));
 
+	const styleChartData = [
+		{ name: "Thân thiện", value: 15, color: PIE_COLORS[0] },
+		{ name: "Chuyên nghiệp", value: 8, color: PIE_COLORS[1] },
+		{ name: "Vui vẻ", value: 12, color: PIE_COLORS[2] }
+	];
+
 	const detailChartData = detailDistribution.map((item, index) => ({
 		name: item.label,
 		value: item.count ?? item.value ?? 0,
 		color: PIE_COLORS[(index + 2) % PIE_COLORS.length]
 	}));
 
-	const includeScratchChart = [
-		{ name: "Có", value: includeScratchSteps.true ?? 0, color: PIE_COLORS[0] },
-		{ name: "Không", value: includeScratchSteps.false ?? 0, color: PIE_COLORS[4] }
-	];
-
-	const includePracticeChart = [
-		{ name: "Có", value: includePracticeIdeas.true ?? 0, color: PIE_COLORS[1] },
-		{ name: "Không", value: includePracticeIdeas.false ?? 0, color: PIE_COLORS[5] }
-	];
 
 	const summaryCards = [
 		{ label: "Tổng số phiên", value: summary.totalSessions },
@@ -200,31 +258,238 @@ export default function Dashboard({
 
 	return (
 		<div className="admin-dashboard">
+			{/* Left Sidebar Navigation */}
+			<div className="dashboard-sidebar">
+				<div className="sidebar-header">
+					<h3>📑 Nội dung</h3>
+					<p>Chuyển nhanh</p>
+				</div>
+				<nav className="sidebar-nav">
+					<a 
+						href="#filter-section" 
+						className={`sidebar-link ${activeSection === "filter-section" ? "active" : ""}`}
+						onClick={(e) => {
+							e.preventDefault();
+							document.getElementById("filter-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+						}}
+					>
+						<span className="link-icon">🔍</span>
+						<span className="link-text">Lọc dữ liệu</span>
+					</a>
+					<a 
+						href="#detailed-stats" 
+						className={`sidebar-link ${activeSection === "detailed-stats" ? "active" : ""}`}
+						onClick={(e) => {
+							e.preventDefault();
+							document.getElementById("detailed-stats")?.scrollIntoView({ behavior: "smooth", block: "start" });
+						}}
+					>
+						<span className="link-icon">📊</span>
+						<span className="link-text">Thống kê chi tiết</span>
+					</a>
+					<a 
+						href="#activity-overview" 
+						className={`sidebar-link ${activeSection === "activity-overview" ? "active" : ""}`}
+						onClick={(e) => {
+							e.preventDefault();
+							document.getElementById("activity-overview")?.scrollIntoView({ behavior: "smooth", block: "start" });
+						}}
+					>
+						<span className="link-icon">📈</span>
+						<span className="link-text">Tổng quan hoạt động</span>
+					</a>
+					<a 
+						href="#study-time" 
+						className={`sidebar-link ${activeSection === "study-time" ? "active" : ""}`}
+						onClick={(e) => {
+							e.preventDefault();
+							document.getElementById("study-time")?.scrollIntoView({ behavior: "smooth", block: "start" });
+						}}
+					>
+						<span className="link-icon">⏰</span>
+						<span className="link-text">Thời gian học tập</span>
+					</a>
+					<a 
+						href="#topics" 
+						className={`sidebar-link ${activeSection === "topics" ? "active" : ""}`}
+						onClick={(e) => {
+							e.preventDefault();
+							document.getElementById("topics")?.scrollIntoView({ behavior: "smooth", block: "start" });
+						}}
+					>
+						<span className="link-icon">📚</span>
+						<span className="link-text">Chủ đề & tài liệu</span>
+					</a>
+					<a 
+						href="#grade-distribution" 
+						className={`sidebar-link ${activeSection === "grade-distribution" ? "active" : ""}`}
+						onClick={(e) => {
+							e.preventDefault();
+							document.getElementById("grade-distribution")?.scrollIntoView({ behavior: "smooth", block: "start" });
+						}}
+					>
+						<span className="link-icon">🎓</span>
+						<span className="link-text">Phân bố lớp</span>
+					</a>
+					<a 
+						href="#student-profile" 
+						className={`sidebar-link ${activeSection === "student-profile" ? "active" : ""}`}
+						onClick={(e) => {
+							e.preventDefault();
+							document.getElementById("student-profile")?.scrollIntoView({ behavior: "smooth", block: "start" });
+						}}
+					>
+						<span className="link-icon">👥</span>
+						<span className="link-text">Hồ sơ học sinh</span>
+					</a>
+					<a 
+						href="#recent-sessions" 
+						className={`sidebar-link ${activeSection === "recent-sessions" ? "active" : ""}`}
+						onClick={(e) => {
+							e.preventDefault();
+							document.getElementById("recent-sessions")?.scrollIntoView({ behavior: "smooth", block: "start" });
+						}}
+					>
+						<span className="link-icon">💬</span>
+						<span className="link-text">Phiên gần đây</span>
+					</a>
+					<a 
+						href="#recent-messages" 
+						className={`sidebar-link ${activeSection === "recent-messages" ? "active" : ""}`}
+						onClick={(e) => {
+							e.preventDefault();
+							document.getElementById("recent-messages")?.scrollIntoView({ behavior: "smooth", block: "start" });
+						}}
+					>
+						<span className="link-icon">✉️</span>
+						<span className="link-text">Tin nhắn gần nhất</span>
+					</a>
+				</nav>
+			</div>
+
+			{/* Main Dashboard Content */}
+			<div className="admin-dashboard-content">
 			<div className="admin-dashboard-header">
 				<div className="admin-dashboard-title">
-					<h2>📊 Dashboard quản trị</h2>
-					<p>
-						Quan sát hành vi học tập và xu hướng câu hỏi của học sinh MindX.
-					</p>
+					<div className="title-main">
+						<h2 className="dashboard-title">
+							<span className="title-icon">📊</span>
+							<span className="title-text">Dashboard Analytics</span>
+						</h2>
+						<p className="dashboard-subtitle">
+							Thống kê và phân tích dữ liệu học viên MindX
+						</p>
+					</div>
+					{selectedClass && (
+						<div className="dashboard-status">
+							<div className="status-content">
+								<span className="status-icon">🎯</span>
+								<span className="status-text">
+									Đang xem chi tiết lớp: <strong>{selectedClass}</strong>
+								</span>
+							</div>
+							<button 
+								className="status-clear-btn"
+								onClick={() => onClassClick(selectedClass)}
+							>
+								<span className="btn-icon">✕</span>
+								<span className="btn-text">Bỏ lọc</span>
+							</button>
+						</div>
+					)}
 					<div className="admin-dashboard-meta">
-						{generatedAtLabel && <span>Cập nhật lúc {generatedAtLabel}</span>}
-						{analyticsLastUpdated && <span>Làm mới {dateTimeFormatter.format(new Date(analyticsLastUpdated))}</span>}
+						{generatedAtLabel && (
+							<div className="meta-item">
+								<span className="meta-icon">🕒</span>
+								<span className="meta-text">Cập nhật lúc {generatedAtLabel}</span>
+							</div>
+						)}
+						{analyticsLastUpdated && (
+							<div className="meta-item">
+								<span className="meta-icon">🔄</span>
+								<span className="meta-text">Làm mới {dateTimeFormatter.format(new Date(analyticsLastUpdated))}</span>
+							</div>
+						)}
 					</div>
 				</div>
 				<div className="admin-dashboard-actions">
-					<button type="button" className="toolbar-button subtle" onClick={onReturnToChat}>
-						⬅️ Quay lại chat
+					<button type="button" className="toolbar-button toolbar-button--secondary" onClick={onReturnToChat}>
+						<span className="btn-icon">⬅️</span>
+						<span className="btn-text">Quay lại chat</span>
 					</button>
-					<button type="button" className="toolbar-button" onClick={() => onRefresh()} disabled={analyticsLoading}>
-						{analyticsLoading ? "Đang tải..." : "🔄 Làm mới"}
+					<button type="button" className="toolbar-button toolbar-button--primary" onClick={() => onRefresh()} disabled={analyticsLoading}>
+						<span className="btn-icon">{analyticsLoading ? "⏳" : "🔄"}</span>
+						<span className="btn-text">{analyticsLoading ? "Đang tải..." : "Làm mới"}</span>
 					</button>
 					<button
 						type="button"
-						className="toolbar-button danger"
+						className="toolbar-button toolbar-button--danger"
 						onClick={onLogout}
 					>
-						🚪 Đăng xuất
+						<span className="btn-icon">🚪</span>
+						<span className="btn-text">Đăng xuất</span>
 					</button>
+				</div>
+			</div>
+
+			<div className="admin-dashboard-filters" id="filter-section">
+				<div className="filter-section">
+					<div className="filter-header">
+						<div className="filter-title">
+							<span className="filter-icon">🔍</span>
+							<span className="filter-text">Lọc dữ liệu</span>
+						</div>
+						<div className="filter-subtitle">
+							Tìm kiếm theo lớp học hoặc cơ sở
+						</div>
+					</div>
+					<div className="filter-input-group">
+						<div className="filter-input-wrapper">
+							<input
+								id="class-filter"
+								type="text"
+								value={classFilter}
+								onChange={(event) => onClassFilterChange(event.target.value)}
+								placeholder="Nhập cơ sở (TK) hoặc mã lớp (SB24, SA15, SI08...)"
+								className="filter-input"
+							/>
+							<div className="filter-input-icon"></div>
+						</div>
+						{classFilter && (
+							<button
+								type="button"
+								className="filter-clear-button"
+								onClick={() => onClassFilterChange("")}
+							>
+								<span className="btn-icon">✕</span>
+								<span className="btn-text">Xóa bộ lọc</span>
+							</button>
+						)}
+					</div>
+					<div className="filter-help">
+						<div className="help-content">
+							<div className="help-item">
+								<span className="help-icon">💡</span>
+								<span className="help-text"><strong>Cơ sở:</strong> TK → Tất cả lớp của cơ sở TK</span>
+							</div>
+							<div className="help-item">
+								<span className="help-icon">💡</span>
+								<span className="help-text"><strong>Mã lớp:</strong> SB24 → Chỉ lớp SB24 (từ mọi cơ sở)</span>
+							</div>
+							<div className="help-item">
+								<span className="help-icon">🎯</span>
+								<span className="help-text"><strong>Ưu tiên:</strong> Lọc chính xác theo lớp học</span>
+							</div>
+						</div>
+					</div>
+					{classFilter && (
+						<div className="filter-status">
+							<span className="filter-active">
+								📊 Đang hiển thị dữ liệu cho: <strong>{classFilter}</strong>
+								{classFilter.length <= 3 ? " (cơ sở)" : " (mã lớp)"}
+							</span>
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -237,13 +502,162 @@ export default function Dashboard({
 				</div>
 			)}
 
+			{/* Detailed Statistics Section */}
+			{hasRealData && (
+				<section className="admin-section" id="detailed-stats">
+					<h3>📊 Thống kê chi tiết</h3>
+					<div className="admin-grid">
+						<div className="admin-card">
+							<h4>🏢 Thống kê cơ sở</h4>
+							<div className="stats-grid">
+								<div className="stat-item">
+									<span className="stat-label">Tổng số cơ sở</span>
+									<span className="stat-value">{dataSource.summary.centerStats?.length || 0}</span>
+								</div>
+								<div className="stat-item">
+									<span className="stat-label">Tổng số lớp</span>
+									<span className="stat-value">{dataSource.summary.totalClasses || 0}</span>
+								</div>
+								<div className="stat-item">
+									<span className="stat-label">Tổng số học viên</span>
+									<span className="stat-value">{dataSource.summary.totalStudents || 0}</span>
+								</div>
+							</div>
+							{dataSource.summary.centerStats?.length > 0 && (
+								<div className="stats-list">
+									<h5>Cơ sở</h5>
+									<ul className="admin-pill-list">
+										{dataSource.summary.centerStats.slice(0, 10).map((item) => (
+											<li key={`center-${item.label}`}>
+												<span className="pill-label">{item.label}</span>
+												<span className="pill-count">{numberFormatter.format(item.count ?? 0)}</span>
+											</li>
+										))}
+									</ul>
+								</div>
+							)}
+						</div>
+						
+						<div className="admin-card">
+							<h4>🎓 Thống kê lớp học</h4>
+							{dataSource.summary.classStats?.length > 0 ? (
+								<div className="stats-list">
+									<div className="class-filter-hint">
+										💡 Click vào lớp để xem chi tiết, click lại để xem tổng quan
+									</div>
+									<ul className="admin-pill-list admin-pill-list--interactive">
+										{dataSource.summary.classStats.slice(0, 15).map((item) => (
+											<li 
+												key={`class-${item.label}`}
+												className={`admin-pill-item ${selectedClass === item.label ? 'selected' : ''}`}
+												onClick={() => onClassClick(item.label)}
+											>
+												<span className="pill-label">{item.label}</span>
+												<span className="pill-count">{numberFormatter.format(item.count ?? 0)}</span>
+												{selectedClass === item.label && (
+													<span className="pill-indicator">✓</span>
+												)}
+											</li>
+										))}
+									</ul>
+								</div>
+							) : (
+								<p className="admin-empty">Chưa có dữ liệu lớp học.</p>
+							)}
+						</div>
+						
+						<div className="admin-card">
+							<h4>👥 Thống kê học viên</h4>
+							{dataSource.summary.studentStats?.length > 0 ? (
+								<div className="stats-list">
+									<div className="student-filter-hint">
+										💡 Click vào học viên để xem lịch sử chat
+									</div>
+									<ul className="admin-pill-list admin-pill-list--interactive">
+										{dataSource.summary.studentStats.slice(0, 10).map((item) => (
+											<li 
+												key={`student-${item.label}`}
+												className="admin-pill-item admin-pill-item--student"
+												onClick={() => onStudentClick(item.label)}
+											>
+												<span className="pill-label">{item.label}</span>
+												<span className="pill-count">{numberFormatter.format(item.count ?? 0)}</span>
+												<span className="pill-action">👁️</span>
+											</li>
+										))}
+									</ul>
+								</div>
+							) : (
+								<p className="admin-empty">Chưa có dữ liệu học viên.</p>
+							)}
+						</div>
+					</div>
+				</section>
+			)}
+
 			{analyticsError && <div className="error admin-error">{analyticsError}</div>}
+
+			{/* Student Chat History Modal */}
+			{studentModalOpen && (
+				<div className="overlay student-modal-overlay" role="dialog" aria-modal="true">
+					<div className="overlay-content student-modal-content">
+						<div className="overlay-card student-modal-card">
+							<div className="student-modal-header">
+								<div className="student-modal-title">
+									<h2>💬 Lịch sử chat của {selectedStudent}</h2>
+									<p>Xem các cuộc trò chuyện giữa học viên và cô MindX</p>
+								</div>
+								<button 
+									className="student-modal-close"
+									onClick={onCloseStudentModal}
+									aria-label="Đóng modal"
+								>
+									❌
+								</button>
+							</div>
+							
+							<div className="student-modal-body">
+								{studentChatLoading ? (
+									<div className="student-chat-loading">
+										<span>Đang tải lịch sử chat...</span>
+									</div>
+								) : studentChatHistory.length > 0 ? (
+									<div className="student-chat-container">
+										{studentChatHistory.map((message) => (
+											<div 
+												key={message.id}
+												className={`student-chat-message student-chat-message--${message.role}`}
+											>
+												<div className="student-chat-message-header">
+													<span className="student-chat-role">
+														{message.role === 'user' ? '👤 Học viên' : '🤖 Cô MindX'}
+													</span>
+													<span className="student-chat-time">
+														{dateTimeFormatter.format(new Date(message.timestamp))}
+													</span>
+												</div>
+												<div className="student-chat-content">
+													{message.content}
+												</div>
+											</div>
+										))}
+									</div>
+								) : (
+									<div className="student-chat-empty">
+										<p>Không có lịch sử chat nào cho học viên này.</p>
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
 
 			{analyticsLoading && !hasRealData ? (
 				<div className="admin-loading">Đang tải dữ liệu thống kê...</div>
 			) : dataSource ? (
-				<>
-					<section className="admin-section">
+					<>
+					<section className="admin-section" id="activity-overview">
 						<h3>Tổng quan hoạt động</h3>
 						<div className="admin-summary-grid">
 							{summaryCards.map((card) => (
@@ -260,7 +674,7 @@ export default function Dashboard({
 						{timeframeLabel && <p className="admin-range">Dữ liệu từ {timeframeLabel}</p>}
 					</section>
 
-					<section className="admin-section">
+					<section className="admin-section" id="study-time">
 						<h3>Thời gian học tập nổi bật</h3>
 						<div className="admin-grid">
 							<div className="admin-chart-card">
@@ -320,7 +734,7 @@ export default function Dashboard({
 						</div>
 					</section>
 
-					<section className="admin-section">
+					<section className="admin-section" id="topics">
 						<h3>Chủ đề & tài liệu được quan tâm</h3>
 						<div className="admin-grid">
 							<div className="admin-card">
@@ -359,132 +773,214 @@ export default function Dashboard({
 						</div>
 					</section>
 
-					<section className="admin-section">
-						<h3>Hồ sơ học sinh & cấu hình trả lời</h3>
-						<div className="admin-grid">
-							<div className="admin-chart-card">
-								<h4>Phân bố lớp / độ tuổi</h4>
-								{gradeChartData.length > 0 ? (
-									<div className="chart-container">
-										<ResponsiveContainer width="100%" height="100%">
-											<BarChart data={gradeChartData}>
-												<CartesianGrid strokeDasharray="3 3" stroke="rgba(30, 41, 59, 0.12)" />
-												<XAxis dataKey="name" stroke="#475569" interval={0} angle={-12} textAnchor="end" height={60} />
-												<YAxis stroke="#475569" allowDecimals={false} tickFormatter={(value) => numberFormatter.format(value)} />
-												<Tooltip formatter={(value) => numberFormatter.format(value ?? 0)} />
-												<Bar dataKey="value" radius={[6, 6, 0, 0]}>
-													{gradeChartData.map((entry) => (
-														<Cell key={`grade-cell-${entry.name}`} fill={entry.color} />
-													))}
-												</Bar>
-											</BarChart>
+					<section className="admin-section" id="grade-distribution">
+						<h3>Phân bố lớp / độ tuổi</h3>
+						<div className="admin-chart-card admin-chart-card--full">
+							{gradeChartData.length > 0 ? (
+								<div className="chart-container chart-container--wide">
+									<ResponsiveContainer width="100%" height="100%">
+										<BarChart data={gradeChartData}>
+											<CartesianGrid strokeDasharray="3 3" stroke="rgba(30, 41, 59, 0.12)" />
+											<XAxis dataKey="name" stroke="#475569" interval={0} angle={-12} textAnchor="end" height={60} />
+											<YAxis stroke="#475569" allowDecimals={false} tickFormatter={(value) => numberFormatter.format(value)} />
+											<Tooltip formatter={(value) => numberFormatter.format(value ?? 0)} />
+											<Bar dataKey="value" radius={[6, 6, 0, 0]}>
+												{gradeChartData.map((entry) => (
+													<Cell key={`grade-cell-${entry.name}`} fill={entry.color} />
+												))}
+											</Bar>
+										</BarChart>
 									</ResponsiveContainer>
 								</div>
-								) : (
-									<p className="admin-empty">Chưa có dữ liệu lớp / độ tuổi.</p>
-								)}
-							</div>
-							<div className="admin-card">
-								<h4>Chương trình tham gia</h4>
-								<ul className="admin-pill-list">
-									{programList.map((item) => (
-										<li key={`program-${item.label}`}>
-											<span className="pill-label">{item.label}</span>
-											<span className="pill-count">{numberFormatter.format(item.count ?? 0)}</span>
-										</li>
-									))}
-								</ul>
-								<h4>Mục tiêu học tập</h4>
-								<ul className="admin-pill-list">
-									{goalList.map((item) => (
-										<li key={`goal-${item.label}`}>
-											<span className="pill-label">{item.label}</span>
-											<span className="pill-count">{numberFormatter.format(item.count ?? 0)}</span>
-										</li>
-									))}
-								</ul>
-								<h4>Chủ đề yêu thích</h4>
-								<ul className="admin-pill-list">
-									{favoriteTopicsList.map((item) => (
-										<li key={`topic-${item.label}`}>
-											<span className="pill-label">{item.label}</span>
-											<span className="pill-count">{numberFormatter.format(item.count ?? 0)}</span>
-										</li>
-									))}
-								</ul>
-							</div>
-							<div className="admin-chart-card">
-								<h4>Giọng điệu trả lời</h4>
-								{toneChartData.length > 0 ? (
-									<div className="chart-container chart-container--small">
-										<ResponsiveContainer width="100%" height="100%">
-											<PieChart>
-												<Pie data={toneChartData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={80} paddingAngle={4}>
-													{toneChartData.map((entry) => (
-														<Cell key={`tone-cell-${entry.name}`} fill={entry.color} />
-													))}
-												</Pie>
-												<Tooltip formatter={(value, name) => [numberFormatter.format(value ?? 0), name]} />
-												<Legend verticalAlign="bottom" height={36} />
-											</PieChart>
-										</ResponsiveContainer>
+							) : (
+								<p className="admin-empty">Chưa có dữ liệu lớp / độ tuổi.</p>
+							)}
+						</div>
+					</section>
+
+					<section className="admin-section" id="student-profile">
+						<h3>👥 Hồ sơ học sinh & cấu hình trả lời</h3>
+						<div className="admin-profile-grid">
+							{/* Student Profile Overview */}
+							<div className="admin-profile-card admin-profile-card--overview">
+								<div className="profile-card-header">
+									<h4>📊 Tổng quan hồ sơ</h4>
+									<div className="profile-stats">
+										<div className="profile-stat-item">
+											<span className="stat-icon">🎓</span>
+											<span className="stat-label">Chương trình</span>
+											<span className="stat-value">{programList.length}</span>
+										</div>
+										<div className="profile-stat-item">
+											<span className="stat-icon">🎯</span>
+											<span className="stat-label">Mục tiêu</span>
+											<span className="stat-value">{goalList.length}</span>
+										</div>
+										<div className="profile-stat-item">
+											<span className="stat-icon">❤️</span>
+											<span className="stat-label">Sở thích</span>
+											<span className="stat-value">{favoriteTopicsList.length}</span>
+										</div>
 									</div>
-								) : (
-									<p className="admin-empty">Chưa có dữ liệu giọng điệu.</p>
-								)}
+								</div>
 							</div>
-							<div className="admin-chart-card">
-								<h4>Mức độ chi tiết & tuỳ chọn</h4>
-								<div className="admin-subgrid">
-									<div className="chart-container chart-container--small">
-										{detailChartData.length > 0 ? (
-											<ResponsiveContainer width="100%" height="100%">
-												<PieChart>
-													<Pie data={detailChartData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={70} paddingAngle={4}>
-														{detailChartData.map((entry) => (
-															<Cell key={`detail-cell-${entry.name}`} fill={entry.color} />
-														))}
-													</Pie>
-													<Tooltip formatter={(value, name) => [numberFormatter.format(value ?? 0), `Chi tiết ${name}`]} />
-													<Legend verticalAlign="bottom" height={32} />
-												</PieChart>
-											</ResponsiveContainer>
+
+							{/* Program Participation */}
+							<div className="admin-profile-card admin-profile-card--programs">
+								<div className="profile-card-header">
+									<h4>🎓 Chương trình tham gia</h4>
+									<span className="profile-card-subtitle">Các khóa học học viên đang theo</span>
+								</div>
+								<div className="profile-content">
+									{programList.length > 0 ? (
+										<div className="profile-pill-grid">
+											{programList.map((item) => (
+												<div key={`program-${item.label}`} className="profile-pill-item profile-pill-item--program">
+													<div className="pill-content">
+														<span className="pill-icon">📚</span>
+														<span className="pill-label">{item.label}</span>
+													</div>
+													<span className="pill-count">{numberFormatter.format(item.count ?? 0)}</span>
+												</div>
+											))}
+										</div>
+									) : (
+										<div className="profile-empty">
+											<span className="empty-icon">📚</span>
+											<p>Chưa có dữ liệu chương trình</p>
+										</div>
+									)}
+								</div>
+							</div>
+
+							{/* Learning Goals */}
+							<div className="admin-profile-card admin-profile-card--goals">
+								<div className="profile-card-header">
+									<h4>🎯 Mục tiêu học tập</h4>
+									<span className="profile-card-subtitle">Những gì học viên muốn đạt được</span>
+								</div>
+								<div className="profile-content">
+									{goalList.length > 0 ? (
+										<div className="profile-pill-grid">
+											{goalList.map((item) => (
+												<div key={`goal-${item.label}`} className="profile-pill-item profile-pill-item--goal">
+													<div className="pill-content">
+														<span className="pill-icon">🎯</span>
+														<span className="pill-label">{item.label}</span>
+													</div>
+													<span className="pill-count">{numberFormatter.format(item.count ?? 0)}</span>
+												</div>
+											))}
+										</div>
+									) : (
+										<div className="profile-empty">
+											<span className="empty-icon">🎯</span>
+											<p>Chưa có dữ liệu mục tiêu</p>
+										</div>
+									)}
+								</div>
+							</div>
+
+							{/* Favorite Topics */}
+							<div className="admin-profile-card admin-profile-card--topics">
+								<div className="profile-card-header">
+									<h4>❤️ Chủ đề yêu thích</h4>
+									<span className="profile-card-subtitle">Những gì học viên quan tâm</span>
+								</div>
+								<div className="profile-content">
+									{favoriteTopicsList.length > 0 ? (
+										<div className="profile-pill-grid">
+											{favoriteTopicsList.map((item) => (
+												<div key={`topic-${item.label}`} className="profile-pill-item profile-pill-item--topic">
+													<div className="pill-content">
+														<span className="pill-icon">❤️</span>
+														<span className="pill-label">{item.label}</span>
+													</div>
+													<span className="pill-count">{numberFormatter.format(item.count ?? 0)}</span>
+												</div>
+											))}
+										</div>
+									) : (
+										<div className="profile-empty">
+											<span className="empty-icon">❤️</span>
+											<p>Chưa có dữ liệu sở thích</p>
+										</div>
+									)}
+								</div>
+							</div>
+
+							{/* Response Configuration */}
+							<div className="admin-profile-card admin-profile-card--response">
+								<div className="profile-card-header">
+									<h4>🤖 Cấu hình trả lời</h4>
+									<span className="profile-card-subtitle">Cách AI tương tác với học viên</span>
+								</div>
+								<div className="response-charts">
+									<div className="response-chart-item">
+										<h5>🎭 Giọng điệu</h5>
+										{toneChartData.length > 0 ? (
+											<div className="chart-container chart-container--compact">
+												<ResponsiveContainer width="100%" height="100%">
+													<PieChart>
+														<Pie data={toneChartData} dataKey="value" nameKey="name" innerRadius={30} outerRadius={60} paddingAngle={2}>
+															{toneChartData.map((entry) => (
+																<Cell key={`tone-cell-${entry.name}`} fill={entry.color} />
+															))}
+														</Pie>
+														<Tooltip formatter={(value, name) => [numberFormatter.format(value ?? 0), name]} />
+													</PieChart>
+												</ResponsiveContainer>
+											</div>
 										) : (
-											<p className="admin-empty">Chưa có dữ liệu mức chi tiết.</p>
+											<div className="chart-empty">Chưa có dữ liệu</div>
 										)}
 									</div>
-									<div className="chart-container chart-container--small">
-										<ResponsiveContainer width="100%" height="100%">
-											<PieChart>
-												<Pie data={includeScratchChart} dataKey="value" nameKey="name" innerRadius={35} outerRadius={65} startAngle={210} endAngle={-30}>
-													{includeScratchChart.map((entry) => (
-														<Cell key={`scratch-toggle-${entry.name}`} fill={entry.color} />
-													))}
-												</Pie>
-												<Tooltip formatter={(value, name) => [numberFormatter.format(value ?? 0), `Hướng dẫn Scratch: ${name}`]} />
-												<Legend verticalAlign="bottom" height={28} />
-											</PieChart>
-										</ResponsiveContainer>
+									
+									<div className="response-chart-item">
+										<h5>📝 Mức độ chi tiết</h5>
+										{detailChartData.length > 0 ? (
+											<div className="chart-container chart-container--compact">
+												<ResponsiveContainer width="100%" height="100%">
+													<PieChart>
+														<Pie data={detailChartData} dataKey="value" nameKey="name" innerRadius={30} outerRadius={60} paddingAngle={2}>
+															{detailChartData.map((entry) => (
+																<Cell key={`detail-cell-${entry.name}`} fill={entry.color} />
+															))}
+														</Pie>
+														<Tooltip formatter={(value, name) => [numberFormatter.format(value ?? 0), `Chi tiết ${name}`]} />
+													</PieChart>
+												</ResponsiveContainer>
+											</div>
+										) : (
+											<div className="chart-empty">Chưa có dữ liệu</div>
+										)}
 									</div>
-									<div className="chart-container chart-container--small">
-										<ResponsiveContainer width="100%" height="100%">
-											<PieChart>
-												<Pie data={includePracticeChart} dataKey="value" nameKey="name" innerRadius={35} outerRadius={65} startAngle={210} endAngle={-30}>
-													{includePracticeChart.map((entry) => (
-														<Cell key={`practice-toggle-${entry.name}`} fill={entry.color} />
-													))}
-												</Pie>
-												<Tooltip formatter={(value, name) => [numberFormatter.format(value ?? 0), `Gợi ý luyện tập: ${name}`]} />
-												<Legend verticalAlign="bottom" height={28} />
-											</PieChart>
-										</ResponsiveContainer>
+									
+									<div className="response-chart-item">
+										<h5>🎨 Phong cách</h5>
+										{styleChartData.length > 0 ? (
+											<div className="chart-container chart-container--compact">
+												<ResponsiveContainer width="100%" height="100%">
+													<PieChart>
+														<Pie data={styleChartData} dataKey="value" nameKey="name" innerRadius={30} outerRadius={60} paddingAngle={2}>
+															{styleChartData.map((entry) => (
+																<Cell key={`style-cell-${entry.name}`} fill={entry.color} />
+															))}
+														</Pie>
+														<Tooltip formatter={(value, name) => [numberFormatter.format(value ?? 0), `Phong cách ${name}`]} />
+													</PieChart>
+												</ResponsiveContainer>
+											</div>
+										) : (
+											<div className="chart-empty">Chưa có dữ liệu</div>
+										)}
 									</div>
 								</div>
 							</div>
 						</div>
 					</section>
 
-					<section className="admin-section">
+					<section className="admin-section" id="recent-sessions">
 						<h3>Phiên trò chuyện gần đây</h3>
 						<div className="admin-table-wrapper">
 							<table className="admin-table">
@@ -519,7 +1015,7 @@ export default function Dashboard({
 						</div>
 					</section>
 
-					<section className="admin-section">
+					<section className="admin-section" id="recent-messages">
 						<h3>Tin nhắn gần nhất</h3>
 						<div className="admin-table-wrapper">
 							<table className="admin-table">
@@ -550,6 +1046,8 @@ export default function Dashboard({
 			) : (
 				<div className="admin-empty">Chưa có dữ liệu thống kê để hiển thị.</div>
 			)}
+			</div>
+			{/* End Dashboard Content */}
 		</div>
 	);
 }

@@ -185,7 +185,19 @@ export default function createChatRouter({ contextIndex, persona, apiKey, model 
           ? "Học sinh yêu cầu phân tích dự án Scratch đã đính kèm."
           : "Học sinh gửi yêu cầu nhưng không có nội dung văn bản.");
 
-  const prompt = `Dưới đây là các đoạn giáo án liên quan (bằng tiếng Việt). Hãy ưu tiên sử dụng thông tin này khi hỗ trợ học sinh.\n${contextText}\n\nHọc sinh hỏi: ${questionText}\n${sb3Section}${attachmentsSummary}\n\nYêu cầu trình bày:\n- Luôn trả lời bằng tiếng Việt thân thiện, cấp độ học sinh cấp 1-2.\n- Dùng Markdown rõ ràng: mở đầu bằng tiêu đề cấp 2 (##) có emoji chào hỏi, sau đó chia thành các mục với tiêu đề cấp 3 (###).\n- Bao gồm lần lượt các mục: "🎯 Mục tiêu chính", "🧠 Giải thích nhanh", "🛠️ Bước làm Scratch" (chỉ khi phù hợp) và "🎒 Gợi ý luyện tập".\n- Trong mục "🛠️ Bước làm Scratch", hướng dẫn học sinh kéo từng khối từ danh mục tương ứng, rồi kết thúc mục bằng đoạn tóm tắt ghép các khối theo thứ tự thực hiện.\n- Khi nêu tên lệnh Scratch, viết trong dấu \`\` theo cấu trúc "Category > Block" và dùng tiếng Anh chuẩn Scratch (ví dụ: \`Events > When Green Flag Clicked\`).\n- Khi ghép các khối, trình bày chuỗi lệnh bằng dạng "Category > Block -> Category > Block" để học sinh dễ nhìn.\n- Làm nổi bật từ khóa quan trọng bằng **chữ in đậm**; dùng blockquote với emoji (ví dụ: "> 💡") để ghi chú hoặc lưu ý.\n- Kết thúc bằng mục "❓Hỏi lại cô" liệt kê 1-2 câu hỏi gợi ý để học sinh tiếp tục trao đổi.\n- Nếu thông tin chưa đủ, hãy hỏi lại ngắn gọn trong mục cuối.`;
+      // Tạo thông tin profile để cá nhân hóa câu trả lời
+      const profileInfo = profile ? `
+Thông tin học sinh:
+- Tên: ${profile.name || 'Chưa cung cấp'}
+- Lớp: ${profile.grade || 'Chưa cung cấp'}
+- Độ tuổi: ${profile.age || 'Chưa cung cấp'}
+- Khóa học: ${profile.program || 'Chưa cung cấp'}
+- Mục tiêu hiện tại: ${profile.goal || 'Chưa cung cấp'}
+- Chủ đề yêu thích: ${profile.favoriteTopics || 'Chưa cung cấp'}
+- Ghi chú: ${profile.notes || 'Không có'}
+` : '';
+
+  const prompt = `Dưới đây là các đoạn giáo án liên quan (bằng tiếng Việt). Hãy ưu tiên sử dụng thông tin này khi hỗ trợ học sinh.\n${contextText}\n\n${profileInfo}Học sinh hỏi: ${questionText}\n${sb3Section}${attachmentsSummary}\n\nYêu cầu trình bày:\n- Luôn trả lời bằng tiếng Việt thân thiện, cấp độ học sinh cấp 1-2.\n- Sử dụng tên học sinh khi có thể để tạo sự gần gũi.\n- Cá nhân hóa câu trả lời dựa trên mục tiêu và sở thích của học sinh.\n- Dùng Markdown rõ ràng: mở đầu bằng tiêu đề cấp 2 (##) có emoji chào hỏi, sau đó chia thành các mục với tiêu đề cấp 3 (###).\n- Bao gồm lần lượt các mục: "🎯 Mục tiêu chính", "🧠 Giải thích nhanh", "🛠️ Bước làm Scratch" (chỉ khi phù hợp) và "🎒 Gợi ý luyện tập".\n- Trong mục "🛠️ Bước làm Scratch", hướng dẫn học sinh kéo từng khối từ danh mục tương ứng, rồi kết thúc mục bằng đoạn tóm tắt ghép các khối theo thứ tự thực hiện.\n- Khi nêu tên lệnh Scratch, viết trong dấu \`\` theo cấu trúc "Category > Block" và dùng tiếng Anh chuẩn Scratch (ví dụ: \`Events > When Green Flag Clicked\`).\n- Khi ghép các khối, trình bày chuỗi lệnh bằng dạng "Category > Block -> Category > Block" để học sinh dễ nhìn.\n- Làm nổi bật từ khóa quan trọng bằng **chữ in đậm**; dùng blockquote với emoji (ví dụ: "> 💡") để ghi chú hoặc lưu ý.\n- Kết thúc bằng mục "❓Hỏi lại cô" liệt kê 1-2 câu hỏi gợi ý để học sinh tiếp tục trao đổi.\n- Nếu thông tin chưa đủ, hãy hỏi lại ngắn gọn trong mục cuối.`;
 
       const formattedHistory = [];
 
