@@ -149,30 +149,6 @@ save 300 10
         └──────────────────────────┘
 ```
 
----
-
-## 🎯 PLATFORM KHUYẾN NGHỊ
-
-### Option 1: AWS EC2
-- **Instance:** t3.large (2 vCPU, 8GB RAM) - Budget
-- **Hoặc:** c6i.xlarge (4 vCPU, 8GB RAM) - Performance
-- **Storage:** 200GB gp3 SSD
-- **Network:** Up to 5 Gbps
-
-### Option 2: Google Cloud
-- **Instance:** e2-standard-4 (4 vCPU, 8GB RAM)
-- **Hoặc:** n2-standard-2 (2 vCPU, 8GB RAM)
-- **Storage:** 200GB Balanced SSD
-- **Network:** Standard tier
-
-### Option 3: DigitalOcean (Khuyến nghị - Budget)
-- **Droplet:** Premium 8GB ($48/tháng)
-- **CPU:** 4 vCPU dedicated
-- **Storage:** 160GB NVMe SSD
-- **Bandwidth:** 5TB included
-
----
-
 ## 📋 CHECKLIST SETUP
 
 ### ✅ Server có sẵn - Cần kiểm tra:
