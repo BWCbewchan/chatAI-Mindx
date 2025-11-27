@@ -198,14 +198,6 @@ save 300 10
 - [ ] Domain name (nếu chưa có)
 - [ ] CloudFlare (CDN - optional)
 
----
-
-## 📞 LIÊN HỆ
-
-**Technical Team**  
-Email: tech@mindx.edu.vn
-
----
 
 ## ✅ TÓM TẮT
 
