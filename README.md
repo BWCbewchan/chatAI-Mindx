@@ -22,7 +22,6 @@
 - ✅ **Ứng dụng này**: 
   - Mỗi khối lệnh hiển thị **đúng màu** của Scratch (Events màu vàng, Motion màu xanh...)
   - Hướng dẫn "**kéo khối này → nối khối kia**" rõ ràng từng bước
-  - Nút bấm **tạo file .sb3** tự động từ chuỗi lệnh AI gợi ý
 - ❌ **ChatGPT**: Chỉ hiển thị text đen trắng, không phân biệt màu khối. Học sinh khó hình dung.
 
 ### 4️⃣ **Lưu trữ lịch sử riêng tư và miễn phí**
@@ -64,7 +63,6 @@
 | **Hiểu giáo án MindX** | ✅ Tự động tìm & trích dẫn | ❌ Không biết, phải copy-paste |
 | **Phân tích file .sb3** | ✅ Chi tiết từng khối | ❌ Không đọc được |
 | **Hiển thị màu Scratch** | ✅ Đúng màu từng category | ❌ Text đen trắng |
-| **Tạo file .sb3 tự động** | ✅ Có nút bấm | ❌ Không có |
 | **Lưu trữ riêng tư** | ✅ Trên máy bạn | ⚠️ Trên máy chủ OpenAI |
 | **Chi phí** | ✅ Miễn phí (hoặc rất rẻ) | ❌ $20/tháng (GPT-4) |
 | **Tùy biến** | ✅ 100% | ❌ Bị giới hạn |
@@ -84,7 +82,6 @@
   - Bài tập luyện thêm
 - **💾 Lưu nhiều cuộc trò chuyện**: Mỗi buổi học tạo 1 cuộc trò chuyện riêng, dễ tìm lại sau.
 - **👤 Hồ sơ cá nhân**: Điền tên, lớp, mục tiêu → AI gọi tên và hỗ trợ phù hợp hơn.
-- **📥 Tạo file Scratch tự động**: AI hướng dẫn xong → bấm nút "Tải xuống .sb3" → mở luôn trong Scratch.
 
 ### 👨‍🏫 **Cho Giáo Viên / Quản Lý**
 - **📊 Bảng điều khiển**: Xem có bao nhiêu học sinh đã hỏi, câu hỏi phổ biến nhất.
@@ -140,13 +137,6 @@ Thử làm mèo di chuyển qua lại bằng cách thêm:
 ### ❓ Hỏi lại cô
 Em muốn mèo di chuyển theo hướng nào? Ngang hay dọc?
 ```
-
----
-
-### **Tình huống 3: Tạo file Scratch nhanh**
-**Học sinh hỏi**: _"Cô tạo giúp em chương trình mèo chạy và kêu Meow được không ạ?"_
-
-**AI hướng dẫn** → Học sinh bấm nút **"Tải xuống .sb3"** → Mở file trong Scratch → Chạy luôn!
 
 ## ❓ Câu Hỏi Thường Gặp (FAQ)
 
